@@ -44,22 +44,23 @@ grist.ready({
 async function getAllColumnsFromMetadata() {
   try {
     // Utiliser fetchSelectedTable qui respecte les permissions de table
-    const records = await grist.fetchSelectedTable();
-    console.log('📊 fetchSelectedTable OK, nb records:', records.length);
+    // Retourne un objet { colA: [val1, val2], colB: [val1, val2] }
+    const tableData = await grist.fetchSelectedTable();
+    console.log('📊 fetchSelectedTable OK, colonnes:', Object.keys(tableData));
 
-    if (!records || records.length === 0) {
-      console.warn('⚠️ Aucun record, impossible d\'inférer les colonnes');
+    if (!tableData || Object.keys(tableData).length === 0) {
+      console.warn('⚠️ Aucune donnée, impossible d\'inférer les colonnes');
       return [];
     }
 
-    // Extraire les colonnes depuis le premier record
-    const cols = Object.keys(records[0]).filter(colId =>
+    // Les clés de l'objet sont les noms de colonnes
+    const cols = Object.keys(tableData).filter(colId =>
       colId !== 'id' &&
       colId !== 'manualSort' &&
       !colId.startsWith('gristHelper')
     );
 
-    console.log('✅ Colonnes détectées depuis données:', cols);
+    console.log('✅ Colonnes détectées:', cols);
     return cols;
   } catch (error) {
     console.error('❌ Erreur fetchSelectedTable:', error);
@@ -846,20 +847,23 @@ async function getColumnMetadata() {
 async function getColumnMetadataFromData() {
   console.warn('⚠️ Fallback: inférence metadata depuis données');
   try {
-    const records = await grist.fetchSelectedTable();
-    if (!records || records.length === 0) {
+    // fetchSelectedTable retourne { colA: [val1, val2], colB: [val1, val2] }
+    const tableData = await grist.fetchSelectedTable();
+    if (!tableData || Object.keys(tableData).length === 0) {
       return {};
     }
 
     const metadata = {};
-    const sample = records[0];
 
-    for (const colId of Object.keys(sample)) {
+    for (const colId of Object.keys(tableData)) {
       if (colId === 'id' || colId === 'manualSort' || colId.startsWith('gristHelper')) {
         continue;
       }
 
-      const value = sample[colId];
+      // Prendre la première valeur non-null pour inférer le type
+      const values = tableData[colId];
+      const value = values.find(v => v !== null && v !== undefined);
+
       let type = 'Text';
       let isBool = false;
       let isDate = false;
