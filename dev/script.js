@@ -1260,6 +1260,7 @@ addButton.addEventListener('click', async () => {
     updateConditionalFields();
   } catch (error) {
     console.error("Erreur:", error);
-    alert("Erreur: " + error.message);
+    formError.textContent = "Erreur: " + error.message;
+    formError.classList.add('show');
   }
 });
