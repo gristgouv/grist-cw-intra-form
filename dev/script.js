@@ -43,64 +43,28 @@ grist.ready({
 
 async function getAllColumnsFromMetadata() {
   try {
-    // Utiliser l'API REST qui respecte les permissions de table
-    const table = await grist.getTable();
-    const tableId = await table._platform.getTableId();
-    const tokenInfo = await grist.docApi.getAccessToken({ readOnly: true });
+    // Utiliser fetchSelectedTable qui respecte les permissions de table
+    const records = await grist.fetchSelectedTable();
+    console.log('📊 fetchSelectedTable OK, nb records:', records.length);
 
-    const response = await fetch(`${tokenInfo.baseUrl}/tables/${tableId}/columns`, {
-      headers: { 'Authorization': `Bearer ${tokenInfo.token}` }
-    });
-
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+    if (!records || records.length === 0) {
+      console.warn('⚠️ Aucun record, impossible d\'inférer les colonnes');
+      return [];
     }
 
-    const data = await response.json();
-    console.log('📡 API columns response:', data);
+    // Extraire les colonnes depuis le premier record
+    const cols = Object.keys(records[0]).filter(colId =>
+      colId !== 'id' &&
+      colId !== 'manualSort' &&
+      !colId.startsWith('gristHelper')
+    );
 
-    const cols = data.columns
-      .map(col => col.id)
-      .filter(colId =>
-        colId !== 'id' &&
-        colId !== 'manualSort' &&
-        !colId.startsWith('gristHelper')
-      );
-
+    console.log('✅ Colonnes détectées depuis données:', cols);
     return cols;
   } catch (error) {
-    console.error('❌ Erreur API REST columns:', error);
-    // Fallback sur l'ancienne méthode
-    return getAllColumnsFromMetadataLegacy();
+    console.error('❌ Erreur fetchSelectedTable:', error);
+    return [];
   }
-}
-
-// Ancienne méthode en fallback
-async function getAllColumnsFromMetadataLegacy() {
-  console.warn('⚠️ Utilisation méthode legacy pour colonnes');
-  const table = await grist.getTable();
-  const tableName = await table._platform.getTableId();
-
-  const tables = await grist.docApi.fetchTable('_grist_Tables');
-  const columnsTable = await grist.docApi.fetchTable('_grist_Tables_column');
-
-  const tableRef = tables.id[tables.tableId.indexOf(tableName)];
-  const cols = [];
-
-  for (let i = 0; i < columnsTable.parentId.length; i++) {
-    if (columnsTable.parentId[i] === tableRef) {
-      const colId = columnsTable.colId[i];
-      if (
-        colId !== 'id' &&
-        colId !== 'manualSort' &&
-        !colId.startsWith('gristHelper')
-      ) {
-        cols.push(colId);
-      }
-    }
-  }
-
-  return cols;
 }
 
 async function loadConfiguration() {
@@ -787,9 +751,11 @@ configModal.addEventListener('click', (e) => {
 async function getColumnMetadata() {
   try {
     // Utiliser l'API REST qui respecte les permissions de table
-    const table = await grist.getTable();
-    const tableId = await table._platform.getTableId();
+    const tableId = await grist.selectedTable.getTableId();
+    console.log('📍 TableId pour metadata:', tableId);
+
     const tokenInfo = await grist.docApi.getAccessToken({ readOnly: true });
+    console.log('🔑 Token obtenu pour metadata');
 
     const response = await fetch(`${tokenInfo.baseUrl}/tables/${tableId}/columns`, {
       headers: { 'Authorization': `Bearer ${tokenInfo.token}` }
@@ -871,72 +837,72 @@ async function getColumnMetadata() {
     return metadata;
   } catch (error) {
     console.error("❌ Erreur API REST metadata:", error);
-    // Fallback sur l'ancienne méthode
-    return getColumnMetadataLegacy();
+    // Fallback: inférer depuis les données
+    return getColumnMetadataFromData();
   }
 }
 
-// Ancienne méthode en fallback
-async function getColumnMetadataLegacy() {
-  console.warn('⚠️ Utilisation méthode legacy pour metadata');
+// Fallback: inférer les métadonnées depuis les données
+async function getColumnMetadataFromData() {
+  console.warn('⚠️ Fallback: inférence metadata depuis données');
   try {
-    const table = await grist.getTable();
-    const currentTableId = await table._platform.getTableId();
-    const docInfo = await grist.docApi.fetchTable('_grist_Tables_column');
-    const tablesInfo = await grist.docApi.fetchTable('_grist_Tables');
+    const records = await grist.fetchSelectedTable();
+    if (!records || records.length === 0) {
+      return {};
+    }
+
     const metadata = {};
+    const sample = records[0];
 
-    const currentTableNumericId = tablesInfo.id[tablesInfo.tableId.indexOf(currentTableId)];
-
-    for (let i = 0; i < docInfo.colId.length; i++) {
-      if (docInfo.parentId[i] !== currentTableNumericId) continue;
-
-      const colId = docInfo.colId[i];
-      const type = docInfo.type[i];
-      let choices = null;
-      let refTable = null;
-      let refChoices = [];
-
-      if (docInfo.widgetOptions?.[i]) {
-        try {
-          const options = JSON.parse(docInfo.widgetOptions[i]);
-          if (options.choices) choices = options.choices;
-        } catch (e) { }
+    for (const colId of Object.keys(sample)) {
+      if (colId === 'id' || colId === 'manualSort' || colId.startsWith('gristHelper')) {
+        continue;
       }
 
-      if (type.startsWith('Ref:')) {
-        refTable = type.substring(4);
-      } else if (type.startsWith('RefList:')) {
-        refTable = type.substring(8);
-      }
+      const value = sample[colId];
+      let type = 'Text';
+      let isBool = false;
+      let isDate = false;
+      let isNumeric = false;
+      let isInt = false;
+      let isMultiple = false;
+      let isRef = false;
 
-      if (refTable) {
-        try {
-          const refData = await grist.docApi.fetchTable(refTable);
-          refChoices = refData.id.map((id, idx) => ({
-            id: id,
-            label: refData[Object.keys(refData).find(k => k !== 'id' && k !== 'manualSort')]?.[idx] || id
-          }));
-        } catch (e) { }
+      // Inférer le type depuis la valeur
+      if (typeof value === 'boolean') {
+        type = 'Bool';
+        isBool = true;
+      } else if (Array.isArray(value) && value[0] === 'L') {
+        // RefList ou ChoiceList
+        type = 'ChoiceList';
+        isMultiple = true;
+      } else if (typeof value === 'number') {
+        type = 'Numeric';
+        isNumeric = true;
+        if (Number.isInteger(value)) {
+          type = 'Int';
+          isInt = true;
+        }
       }
 
       metadata[colId] = {
         type,
-        choices,
-        isMultiple: type === 'ChoiceList' || type.startsWith('RefList:'),
-        isRef: type.startsWith('Ref:') || type.startsWith('RefList:'),
-        refTable,
-        refChoices,
-        isBool: type === 'Bool',
-        isDate: type === 'Date' || type === 'DateTime',
-        isNumeric: type === 'Numeric',
-        isInt: type === 'Int'
+        choices: null,
+        isMultiple,
+        isRef,
+        refTable: null,
+        refChoices: [],
+        isBool,
+        isDate,
+        isNumeric,
+        isInt
       };
     }
 
+    console.log('✅ Metadata inférée:', metadata);
     return metadata;
   } catch (error) {
-    console.error("Erreur legacy:", error);
+    console.error("❌ Erreur inférence metadata:", error);
     return {};
   }
 }
