@@ -43,28 +43,39 @@ grist.ready({
 
 async function getAllColumnsFromMetadata() {
   try {
-    // Utiliser fetchSelectedTable qui respecte les permissions de table
-    // Retourne un objet { colA: [val1, val2], colB: [val1, val2] }
-    const tableData = await grist.fetchSelectedTable();
-    console.log('📊 fetchSelectedTable OK, colonnes:', Object.keys(tableData));
+    // Méthode standard via tables système
+    const table = await grist.getTable();
+    const tableName = await table._platform.getTableId();
 
-    if (!tableData || Object.keys(tableData).length === 0) {
-      console.warn('⚠️ Aucune donnée, impossible d\'inférer les colonnes');
-      return [];
+    const tables = await grist.docApi.fetchTable('_grist_Tables');
+    const columnsTable = await grist.docApi.fetchTable('_grist_Tables_column');
+
+    const tableRef = tables.id[tables.tableId.indexOf(tableName)];
+    const cols = [];
+
+    for (let i = 0; i < columnsTable.parentId.length; i++) {
+      if (columnsTable.parentId[i] === tableRef) {
+        const colId = columnsTable.colId[i];
+        if (
+          colId !== 'id' &&
+          colId !== 'manualSort' &&
+          !colId.startsWith('gristHelper')
+        ) {
+          cols.push(colId);
+        }
+      }
     }
 
-    // Les clés de l'objet sont les noms de colonnes
-    const cols = Object.keys(tableData).filter(colId =>
+    return cols;
+  } catch (error) {
+    // Fallback si permissions bloquent l'accès aux tables système
+    console.warn('⚠️ Fallback fetchSelectedTable pour colonnes:', error.message);
+    const tableData = await grist.fetchSelectedTable();
+    return Object.keys(tableData).filter(colId =>
       colId !== 'id' &&
       colId !== 'manualSort' &&
       !colId.startsWith('gristHelper')
     );
-
-    console.log('✅ Colonnes détectées:', cols);
-    return cols;
-  } catch (error) {
-    console.error('❌ Erreur fetchSelectedTable:', error);
-    return [];
   }
 }
 
@@ -751,74 +762,44 @@ configModal.addEventListener('click', (e) => {
 
 async function getColumnMetadata() {
   try {
-    // Utiliser l'API REST qui respecte les permissions de table
-    const tableId = await grist.selectedTable.getTableId();
-    console.log('📍 TableId pour metadata:', tableId);
-
-    const tokenInfo = await grist.docApi.getAccessToken({ readOnly: true });
-    console.log('🔑 Token obtenu pour metadata');
-
-    const response = await fetch(`${tokenInfo.baseUrl}/tables/${tableId}/columns`, {
-      headers: { 'Authorization': `Bearer ${tokenInfo.token}` }
-    });
-
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('📡 API columns metadata response:', data);
-
+    const table = await grist.getTable();
+    const currentTableId = await table._platform.getTableId();
+    const docInfo = await grist.docApi.fetchTable('_grist_Tables_column');
+    const tablesInfo = await grist.docApi.fetchTable('_grist_Tables');
     const metadata = {};
 
-    for (const col of data.columns) {
-      const colId = col.id;
-      if (colId === 'id' || colId === 'manualSort' || colId.startsWith('gristHelper')) {
-        continue;
-      }
+    const currentTableNumericId = tablesInfo.id[tablesInfo.tableId.indexOf(currentTableId)];
 
-      const type = col.fields.type || 'Text';
+    for (let i = 0; i < docInfo.colId.length; i++) {
+      if (docInfo.parentId[i] !== currentTableNumericId) continue;
+
+      const colId = docInfo.colId[i];
+      const type = docInfo.type[i];
       let choices = null;
       let refTable = null;
       let refChoices = [];
 
-      // Parser widgetOptions si présent
-      if (col.fields.widgetOptions) {
+      if (docInfo.widgetOptions?.[i]) {
         try {
-          const options = typeof col.fields.widgetOptions === 'string'
-            ? JSON.parse(col.fields.widgetOptions)
-            : col.fields.widgetOptions;
+          const options = JSON.parse(docInfo.widgetOptions[i]);
           if (options.choices) choices = options.choices;
         } catch (e) { }
       }
 
-      // Déterminer la table référencée
       if (type.startsWith('Ref:')) {
         refTable = type.substring(4);
       } else if (type.startsWith('RefList:')) {
         refTable = type.substring(8);
       }
 
-      // Récupérer les choix de la table référencée via API REST
       if (refTable) {
         try {
-          const refResponse = await fetch(`${tokenInfo.baseUrl}/tables/${refTable}/records`, {
-            headers: { 'Authorization': `Bearer ${tokenInfo.token}` }
-          });
-          if (refResponse.ok) {
-            const refData = await refResponse.json();
-            refChoices = refData.records.map(record => {
-              // Trouver la première colonne non-id pour le label
-              const labelKey = Object.keys(record.fields).find(k => k !== 'id' && k !== 'manualSort');
-              return {
-                id: record.id,
-                label: labelKey ? record.fields[labelKey] : record.id
-              };
-            });
-          }
-        } catch (e) {
-          console.warn(`⚠️ Impossible de charger les refs pour ${refTable}:`, e);
-        }
+          const refData = await grist.docApi.fetchTable(refTable);
+          refChoices = refData.id.map((id, idx) => ({
+            id: id,
+            label: refData[Object.keys(refData).find(k => k !== 'id' && k !== 'manualSort')]?.[idx] || id
+          }));
+        } catch (e) { }
       }
 
       metadata[colId] = {
@@ -837,76 +818,83 @@ async function getColumnMetadata() {
 
     return metadata;
   } catch (error) {
-    console.error("❌ Erreur API REST metadata:", error);
-    // Fallback: inférer depuis les données
-    return getColumnMetadataFromData();
+    // Fallback via API REST si permissions bloquent tables système
+    console.warn('⚠️ Fallback API REST pour metadata:', error.message);
+    return getColumnMetadataViaREST();
   }
 }
 
-// Fallback: inférer les métadonnées depuis les données
-async function getColumnMetadataFromData() {
-  console.warn('⚠️ Fallback: inférence metadata depuis données');
+// Fallback API REST pour les métadonnées
+async function getColumnMetadataViaREST() {
   try {
-    // fetchSelectedTable retourne { colA: [val1, val2], colB: [val1, val2] }
-    const tableData = await grist.fetchSelectedTable();
-    if (!tableData || Object.keys(tableData).length === 0) {
-      return {};
-    }
+    const tableId = await grist.selectedTable.getTableId();
+    const tokenInfo = await grist.docApi.getAccessToken({ readOnly: true });
 
+    const response = await fetch(`${tokenInfo.baseUrl}/tables/${tableId}/columns`, {
+      headers: { 'Authorization': `Bearer ${tokenInfo.token}` }
+    });
+
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+
+    const data = await response.json();
     const metadata = {};
 
-    for (const colId of Object.keys(tableData)) {
-      if (colId === 'id' || colId === 'manualSort' || colId.startsWith('gristHelper')) {
-        continue;
+    for (const col of data.columns) {
+      const colId = col.id;
+      if (colId === 'id' || colId === 'manualSort' || colId.startsWith('gristHelper')) continue;
+
+      const type = col.fields.type || 'Text';
+      let choices = null;
+      let refTable = null;
+      let refChoices = [];
+
+      if (col.fields.widgetOptions) {
+        try {
+          const options = typeof col.fields.widgetOptions === 'string'
+            ? JSON.parse(col.fields.widgetOptions)
+            : col.fields.widgetOptions;
+          if (options.choices) choices = options.choices;
+        } catch (e) { }
       }
 
-      // Prendre la première valeur non-null pour inférer le type
-      const values = tableData[colId];
-      const value = values.find(v => v !== null && v !== undefined);
+      if (type.startsWith('Ref:')) {
+        refTable = type.substring(4);
+      } else if (type.startsWith('RefList:')) {
+        refTable = type.substring(8);
+      }
 
-      let type = 'Text';
-      let isBool = false;
-      let isDate = false;
-      let isNumeric = false;
-      let isInt = false;
-      let isMultiple = false;
-      let isRef = false;
-
-      // Inférer le type depuis la valeur
-      if (typeof value === 'boolean') {
-        type = 'Bool';
-        isBool = true;
-      } else if (Array.isArray(value) && value[0] === 'L') {
-        // RefList ou ChoiceList
-        type = 'ChoiceList';
-        isMultiple = true;
-      } else if (typeof value === 'number') {
-        type = 'Numeric';
-        isNumeric = true;
-        if (Number.isInteger(value)) {
-          type = 'Int';
-          isInt = true;
-        }
+      if (refTable) {
+        try {
+          const refResponse = await fetch(`${tokenInfo.baseUrl}/tables/${refTable}/records`, {
+            headers: { 'Authorization': `Bearer ${tokenInfo.token}` }
+          });
+          if (refResponse.ok) {
+            const refData = await refResponse.json();
+            refChoices = refData.records.map(record => {
+              const labelKey = Object.keys(record.fields).find(k => k !== 'id' && k !== 'manualSort');
+              return { id: record.id, label: labelKey ? record.fields[labelKey] : record.id };
+            });
+          }
+        } catch (e) { }
       }
 
       metadata[colId] = {
         type,
-        choices: null,
-        isMultiple,
-        isRef,
-        refTable: null,
-        refChoices: [],
-        isBool,
-        isDate,
-        isNumeric,
-        isInt
+        choices,
+        isMultiple: type === 'ChoiceList' || type.startsWith('RefList:'),
+        isRef: type.startsWith('Ref:') || type.startsWith('RefList:'),
+        refTable,
+        refChoices,
+        isBool: type === 'Bool',
+        isDate: type === 'Date' || type === 'DateTime',
+        isNumeric: type === 'Numeric',
+        isInt: type === 'Int'
       };
     }
 
-    console.log('✅ Metadata inférée:', metadata);
     return metadata;
   } catch (error) {
-    console.error("❌ Erreur inférence metadata:", error);
+    console.error("Erreur API REST metadata:", error);
     return {};
   }
 }
@@ -1260,7 +1248,6 @@ addButton.addEventListener('click', async () => {
     updateConditionalFields();
   } catch (error) {
     console.error("Erreur:", error);
-    formError.textContent = "Erreur: " + error.message;
-    formError.classList.add('show');
+    alert("Erreur: " + error.message);
   }
 });
