@@ -26,6 +26,9 @@ grist.ready({
 (async () => {
   console.group('🚀 INIT METADATA');
 
+  // === TESTS DE COMPARAISON (temporaires) ===
+  await runComparisonTests();
+
   columns = await getAllColumnsFromMetadata();
   console.log('✅ Colonnes metadata:', columns);
 
@@ -36,6 +39,169 @@ grist.ready({
 
   console.groupEnd();
 })();
+
+// ============================================
+// FONCTIONS DE TEST (à supprimer après validation)
+// ============================================
+
+async function runComparisonTests() {
+  console.group('🧪 TESTS DE COMPARAISON');
+
+  try {
+    await testCompareColumns();
+  } catch (e) {
+    console.error('❌ Test colonnes échoué:', e.message);
+  }
+
+  try {
+    await testCompareMetadata();
+  } catch (e) {
+    console.error('❌ Test metadata échoué:', e.message);
+  }
+
+  console.groupEnd();
+}
+
+// Test 1: Comparer getAllColumnsFromMetadata (ancienne) vs API REST (nouvelle)
+async function testCompareColumns() {
+  console.group('📋 Test: getAllColumnsFromMetadata');
+
+  // Ancienne méthode (tables système)
+  let oldResult = [];
+  try {
+    const table = await grist.getTable();
+    const tableName = await table._platform.getTableId();
+    const tables = await grist.docApi.fetchTable('_grist_Tables');
+    const columnsTable = await grist.docApi.fetchTable('_grist_Tables_column');
+    const tableRef = tables.id[tables.tableId.indexOf(tableName)];
+
+    for (let i = 0; i < columnsTable.parentId.length; i++) {
+      if (columnsTable.parentId[i] === tableRef) {
+        const colId = columnsTable.colId[i];
+        if (colId !== 'id' && colId !== 'manualSort' && !colId.startsWith('gristHelper')) {
+          oldResult.push(colId);
+        }
+      }
+    }
+    console.log('✅ Ancienne méthode (fetchTable):', oldResult);
+  } catch (e) {
+    console.warn('⚠️ Ancienne méthode échouée:', e.message);
+  }
+
+  // Nouvelle méthode (API REST)
+  let newResult = [];
+  try {
+    const tableId = await grist.selectedTable.getTableId();
+    const tokenInfo = await grist.docApi.getAccessToken({ readOnly: true });
+    const response = await fetch(`${tokenInfo.baseUrl}/tables/${tableId}/columns`, {
+      headers: { 'Authorization': `Bearer ${tokenInfo.token}` }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      newResult = data.columns
+        .map(col => col.id)
+        .filter(colId => colId !== 'id' && colId !== 'manualSort' && !colId.startsWith('gristHelper'));
+    }
+    console.log('✅ Nouvelle méthode (API REST):', newResult);
+  } catch (e) {
+    console.warn('⚠️ Nouvelle méthode échouée:', e.message);
+  }
+
+  // Comparaison
+  const match = JSON.stringify(oldResult.sort()) === JSON.stringify(newResult.sort());
+  console.log(match ? '✅ MATCH: Les deux méthodes retournent le même résultat' : '❌ DIFF: Résultats différents!');
+
+  console.groupEnd();
+}
+
+// Test 2: Comparer getColumnMetadata (ancienne) vs API REST (nouvelle)
+async function testCompareMetadata() {
+  console.group('📋 Test: getColumnMetadata');
+
+  // Ancienne méthode
+  let oldResult = {};
+  try {
+    const table = await grist.getTable();
+    const currentTableId = await table._platform.getTableId();
+    const docInfo = await grist.docApi.fetchTable('_grist_Tables_column');
+    const tablesInfo = await grist.docApi.fetchTable('_grist_Tables');
+    const currentTableNumericId = tablesInfo.id[tablesInfo.tableId.indexOf(currentTableId)];
+
+    for (let i = 0; i < docInfo.colId.length; i++) {
+      if (docInfo.parentId[i] !== currentTableNumericId) continue;
+      const colId = docInfo.colId[i];
+      const type = docInfo.type[i];
+      let choices = null;
+
+      if (docInfo.widgetOptions?.[i]) {
+        try {
+          const options = JSON.parse(docInfo.widgetOptions[i]);
+          if (options.choices) choices = options.choices;
+        } catch (e) { }
+      }
+
+      oldResult[colId] = { type, choices };
+    }
+    console.log('✅ Ancienne méthode (fetchTable):', oldResult);
+  } catch (e) {
+    console.warn('⚠️ Ancienne méthode échouée:', e.message);
+  }
+
+  // Nouvelle méthode (API REST)
+  let newResult = {};
+  try {
+    const tableId = await grist.selectedTable.getTableId();
+    const tokenInfo = await grist.docApi.getAccessToken({ readOnly: true });
+    const response = await fetch(`${tokenInfo.baseUrl}/tables/${tableId}/columns`, {
+      headers: { 'Authorization': `Bearer ${tokenInfo.token}` }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      for (const col of data.columns) {
+        const colId = col.id;
+        const type = col.fields.type || 'Text';
+        let choices = null;
+
+        if (col.fields.widgetOptions) {
+          try {
+            const options = typeof col.fields.widgetOptions === 'string'
+              ? JSON.parse(col.fields.widgetOptions)
+              : col.fields.widgetOptions;
+            if (options.choices) choices = options.choices;
+          } catch (e) { }
+        }
+
+        newResult[colId] = { type, choices };
+      }
+    }
+    console.log('✅ Nouvelle méthode (API REST):', newResult);
+  } catch (e) {
+    console.warn('⚠️ Nouvelle méthode échouée:', e.message);
+  }
+
+  // Comparaison (on compare type et choices pour chaque colonne)
+  let allMatch = true;
+  for (const colId of Object.keys(oldResult)) {
+    if (!newResult[colId]) {
+      console.warn(`⚠️ Colonne ${colId} manquante dans nouvelle méthode`);
+      allMatch = false;
+      continue;
+    }
+    if (oldResult[colId].type !== newResult[colId].type) {
+      console.warn(`⚠️ Type différent pour ${colId}: ${oldResult[colId].type} vs ${newResult[colId].type}`);
+      allMatch = false;
+    }
+    if (JSON.stringify(oldResult[colId].choices) !== JSON.stringify(newResult[colId].choices)) {
+      console.warn(`⚠️ Choices différents pour ${colId}`);
+      allMatch = false;
+    }
+  }
+
+  console.log(allMatch ? '✅ MATCH: Types et choices identiques' : '❌ DIFF: Des différences ont été trouvées');
+
+  console.groupEnd();
+}
 
 
 
