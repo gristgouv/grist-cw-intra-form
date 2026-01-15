@@ -1071,7 +1071,10 @@ async function getColumnMetadataViaREST() {
 
     return metadata;
   } catch (error) {
-    console.error("Erreur API REST metadata:", error);
+    console.error("❌ Erreur API REST metadata:", error);
+    console.error("❌ Error name:", error.name);
+    console.error("❌ Error message:", error.message);
+    console.error("❌ Error stack:", error.stack);
     return {};
   }
 }
