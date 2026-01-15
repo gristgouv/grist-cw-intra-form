@@ -993,16 +993,27 @@ async function getColumnMetadata() {
 // Fallback API REST pour les métadonnées
 async function getColumnMetadataViaREST() {
   try {
-    const tableId = await grist.selectedTable.getTableId();
-    const tokenInfo = await grist.docApi.getAccessToken({ readOnly: true });
+    console.log('🔄 getColumnMetadataViaREST: début');
 
-    const response = await fetch(`${tokenInfo.baseUrl}/tables/${tableId}/columns`, {
+    const tableId = await grist.selectedTable.getTableId();
+    console.log('📍 tableId:', tableId);
+
+    const tokenInfo = await grist.docApi.getAccessToken({ readOnly: true });
+    console.log('🔑 baseUrl:', tokenInfo.baseUrl);
+
+    const url = `${tokenInfo.baseUrl}/tables/${tableId}/columns`;
+    console.log('🌐 Fetching:', url);
+
+    const response = await fetch(url, {
       headers: { 'Authorization': `Bearer ${tokenInfo.token}` }
     });
 
+    console.log('📡 Response status:', response.status);
     if (!response.ok) throw new Error(`API error: ${response.status}`);
 
     const data = await response.json();
+    console.log('📦 API data:', data);
+
     const metadata = {};
 
     for (const col of data.columns) {
