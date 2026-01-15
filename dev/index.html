@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grist Custom Widget</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; background: #fff; padding: 24px; color: #37352f; display: flex; justify-content: center; }
+    .container { width: 500px; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 2000; }
+    .modal.show { display: flex; justify-content: center; align-items: center; }
+    .modal-content { width: 600px; max-height: 90vh; display: flex; flex-direction: column; padding: 16px; background: white; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e0e0e0; }
+    .modal-header h2 { font-size: 16px; font-weight: 600; }
+    .preview-btn { padding: 8px 16px; background: #2383e2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; }
+    .preview-btn:hover { background: #1a6bb8; }
+    .modal-body { flex: 1; overflow-y: auto; margin-bottom: 16px; padding-right: 8px; }
+    .element-item { padding: 8px 10px 8px 36px; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 6px; background: #f9f9f9; display: flex; align-items: flex-start; gap: 10px; position: relative; transition: background-color 0.2s; }
+    .element-item.dragging { opacity: 0.5; }
+    .element-item.drag-over-top { border-top: 2px solid #2383e2; }
+    .element-item.drag-over-bottom { border-bottom: 2px solid #2383e2; }
+    .drag-handle { cursor: grab; color: #999; font-size: 18px; user-select: none; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); }
+    .drag-handle:active { cursor: grabbing; }
+    .element-content-wrapper { flex: 1; min-width: 0; }
+    .element-preview { font-size: 14px; color: #37352f; margin-bottom: 4px; }
+    .element-preview.separator { height: 1px; background: #e0e0e0; margin: 4px 0; }
+    .element-preview.title { font-size: 16px; font-weight: 600; color: #37352f; }
+    .element-preview.text { font-size: 14px; color: #37352f; }
+    .element-preview.field { font-size: 11px; color: #666; margin-top: 4px; margin-bottom: 0; margin-left: 8px; }
+    .field-label-input { width: 100%; padding: 6px 8px; font-size: 13px; border: 1px solid #e0e0e0; border-radius: 3px; margin-bottom: 2px; }
+    .element-controls { display: flex; gap: 6px; flex-shrink: 0; align-items: flex-start; padding-top: 6px; }
+    .element-controls button, .element-controls .icon-btn { background: white; border: 1px solid #e0e0e0; cursor: pointer; font-size: 13px; padding: 4px 7px; border-radius: 4px; transition: all 0.2s; }
+    .element-controls button:hover, .element-controls .icon-btn:not(.active):hover { background: #f0f0f0; }
+    .icon-btn.active { background: #2383e2; color: white; border-color: #2383e2; }
+    .icon-btn { position: relative; }
+    .icon-btn .tooltip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 6px 10px; border-radius: 4px; font-size: 12px; white-space: nowrap; margin-bottom: 4px; z-index: 1000; }
+    .icon-btn .tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 4px solid transparent; border-top-color: #333; }
+    .icon-btn:not(.active):hover .tooltip { display: block; }
+    .icon-btn .icon-star { font-size: 10px; position: relative; top: -2px; }
+    .validation-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 3000; min-width: 300px; }
+    .validation-popup h3 { font-size: 16px; margin-bottom: 12px; color: #37352f; }
+    .validation-popup label { font-size: 14px; color: #37352f; margin-bottom: 8px; display: block; }
+    .validation-popup input { width: 100%; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; margin-bottom: 12px; }
+    .validation-popup-buttons { display: flex; gap: 8px; justify-content: space-between; }
+    .validation-popup-buttons button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .validation-popup-buttons .cancel { background: #f0f0f0; color: #37352f; }
+    .validation-popup-buttons .delete { background: #d32f2f; color: white; }
+    .validation-popup-buttons .save { background: #2383e2; color: white; }
+    .popup-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 2999; }
+    .popup-overlay.show { display: block; }
+    .filter-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 3000; min-width: 350px; }
+    .filter-popup h3 { font-size: 16px; margin-bottom: 16px; color: #37352f; }
+    .filter-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .filter-row label { font-size: 14px; color: #37352f; }
+    .filter-row select { flex: 1; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; }
+    .filter-popup-buttons { display: flex; gap: 8px; justify-content: space-between; margin-top: 16px; }
+    .filter-popup-buttons button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .filter-popup-buttons .cancel { background: #f0f0f0; color: #37352f; }
+    .filter-popup-buttons .delete { background: #d32f2f; color: white; }
+    .filter-popup-buttons .save { background: #2383e2; color: white; }
+    .edit-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 3000; min-width: 400px; }
+    .edit-popup h3 { font-size: 16px; margin-bottom: 12px; color: #37352f; }
+    .edit-popup textarea { width: 100%; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; margin-bottom: 12px; min-height: 80px; resize: vertical; font-family: inherit; }
+    .edit-popup-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+    .edit-popup-buttons button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .edit-popup-buttons .cancel { background: #f0f0f0; color: #37352f; }
+    .edit-popup-buttons .save { background: #2383e2; color: white; }
+    .add-section { display: flex; gap: 12px; align-items: flex-start; padding: 12px; background: #f9f9f9; border-radius: 4px; border: 1px solid #e0e0e0; }
+    .add-section-fields { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .add-element-btn { padding: 10px 16px; background: #2383e2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; white-space: nowrap; }
+    .add-element-btn:hover { background: #1a6bb8; }
+    .element-input { width: 100%; padding: 8px 12px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; }
+    .field { margin-bottom: 20px; }
+    .field.checkbox-field { display: flex; align-items: center; gap: 12px; }
+    .field.checkbox-field label { margin-bottom: 0; }
+    .field.hidden { display: none; }
+    label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 8px; color: #37352f; }
+    input, select { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fff; color: #37352f; transition: border-color 0.2s; }
+    input.error, select.error { border-color: #d32f2f; }
+    .error-message { color: #d32f2f; font-size: 12px; margin-top: 4px; display: none; }
+    .error-message.show { display: block; }
+    .form-error { color: #d32f2f; font-size: 14px; margin-bottom: 12px; padding: 12px; background: #ffebee; border-radius: 4px; display: none; text-align: center; }
+    .form-error.show { display: block; }
+    .form-success { color: #2e7d32; font-size: 14px; margin-bottom: 12px; padding: 12px; background: #e8f5e9; border-radius: 4px; display: none; text-align: center; }
+    .form-success.show { display: block; }
+    .no-columns-message { color: #666; font-size: 14px; margin-bottom: 12px; padding: 12px; background: #f5f5f5; border-radius: 4px; display: none; text-align: center; line-height: 1.5; }
+    .no-columns-message.show { display: block; }
+    input:focus, select:focus { outline: none; border-color: #2383e2; }
+    input[type="checkbox"] { width: auto; margin: 0; }
+    select[multiple] { min-height: 120px; padding: 8px; }
+    select[multiple] option { padding: 6px 8px; border-radius: 3px; margin: 2px 0; }
+    select[multiple] option:checked { background: #2383e2; color: white; }
+    .btn { background: #2383e2; color: white; border: none; padding: 12px 20px; font-size: 14px; font-weight: 500; border-radius: 4px; cursor: pointer; transition: background 0.2s; margin-top: 10px; width: 100%; }
+    .btn:hover { background: #1a6bb8; }
+    .btn:active { transform: translateY(1px); }
+    .separator { height: 1px; background: #e0e0e0; margin: 32px 0; }
+    .custom-title { font-size: 18px; font-weight: 600; margin: 20px 0 12px 0; color: #37352f; }
+    .custom-text { font-size: 14px; color: #37352f; margin: 12px 0; line-height: 1.5; }
+    .edit-icon { font-size: 11px; cursor: pointer; color: #999; margin-left: 8px; }
+    .edit-icon:hover { color: #666; }
+  </style>
+</head>
+<body>
+  <div class="popup-overlay" id="popupOverlay"></div>
+  
+  <div class="modal" id="configModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Configuration du formulaire</h2>
+        <button class="preview-btn" id="closeModal">Prévisualiser</button>
+      </div>
+      
+      <div class="modal-body">
+        <div id="allElements"></div>
+      </div>
+      
+      <div class="add-section">
+        <div class="add-section-fields">
+          <select id="elementType" class="element-input">
+            <option value="">-- Type d'élément --</option>
+            <option value="column">Colonne de la table (question)</option>
+            <option value="separator">Séparateur</option>
+            <option value="title">Titre</option>
+            <option value="text">Texte libre</option>
+          </select>
+          <select id="columnSelect" class="element-input" style="display: none;"></select>
+          <input type="text" id="elementContent" class="element-input" style="display: none;">
+        </div>
+        <button class="add-element-btn" id="addElementBtn">Ajouter</button>
+      </div>
+    </div>
+  </div>
+  
+  <div class="container">
+    <div id="fields"></div>
+    <div class="form-error" id="formError"></div>
+    <div class="form-success" id="formSuccess">Votre réponse a bien été enregistrée</div>
+    <button class="btn" id="addBtn">Valider</button>
+  </div>
+  
+  <script src="script.js"></script>
+</body>
+</html>
