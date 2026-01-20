@@ -791,6 +791,25 @@ function createEditButton(tooltip, onClick) {
   return btn;
 }
 
+function createControls() {
+  const controls = document.createElement('div');
+  controls.className = 'element-controls';
+  return controls;
+}
+
+function createDeleteButton(index) {
+  const btn = document.createElement('button');
+  btn.textContent = '🗑️';
+  btn.onclick = () => {
+    formElements.splice(index, 1);
+    saveConfiguration();
+    renderConfigList();
+    renderForm();
+    updateColumnSelect();
+  };
+  return btn;
+}
+
 function renderConfigList() {
   allElementsContainer.innerHTML = '';
 
@@ -836,8 +855,7 @@ function renderConfigList() {
       contentWrapper.appendChild(labelWrapper);
       contentWrapper.appendChild(preview);
 
-      const controls = document.createElement('div');
-      controls.className = 'element-controls';
+      const controls = createControls();
 
       // Icône édition du libellé
       controls.appendChild(createEditButton('Modifier le libellé', () => showEditPopup(element, index, 'fieldLabel')));
@@ -900,17 +918,7 @@ function renderConfigList() {
       };
       controls.appendChild(filterBtn);
 
-      // Bouton supprimer
-      const deleteBtn = document.createElement('button');
-      deleteBtn.textContent = '🗑️';
-      deleteBtn.onclick = () => {
-        formElements.splice(index, 1);
-        saveConfiguration();
-        renderConfigList();
-        renderForm();
-        updateColumnSelect();
-      };
-      controls.appendChild(deleteBtn);
+      controls.appendChild(createDeleteButton(index));
 
       div.appendChild(contentWrapper);
       div.appendChild(controls);
@@ -918,19 +926,8 @@ function renderConfigList() {
       preview.className = 'element-preview separator';
       contentWrapper.appendChild(preview);
 
-      const controls = document.createElement('div');
-      controls.className = 'element-controls';
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.textContent = '🗑️';
-      deleteBtn.onclick = () => {
-        formElements.splice(index, 1);
-        saveConfiguration();
-        renderConfigList();
-        renderForm();
-        updateColumnSelect();
-      };
-      controls.appendChild(deleteBtn);
+      const controls = createControls();
+      controls.appendChild(createDeleteButton(index));
 
       div.appendChild(contentWrapper);
       div.appendChild(controls);
@@ -939,21 +936,9 @@ function renderConfigList() {
       preview.innerHTML = element.content;
       contentWrapper.appendChild(preview);
 
-      const controls = document.createElement('div');
-      controls.className = 'element-controls';
-
+      const controls = createControls();
       controls.appendChild(createEditButton('Modifier', () => showEditPopup(element, index)));
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.textContent = '🗑️';
-      deleteBtn.onclick = () => {
-        formElements.splice(index, 1);
-        saveConfiguration();
-        renderConfigList();
-        renderForm();
-        updateColumnSelect();
-      };
-      controls.appendChild(deleteBtn);
+      controls.appendChild(createDeleteButton(index));
 
       div.appendChild(contentWrapper);
       div.appendChild(controls);
@@ -962,21 +947,9 @@ function renderConfigList() {
       preview.innerHTML = element.content;
       contentWrapper.appendChild(preview);
 
-      const controls = document.createElement('div');
-      controls.className = 'element-controls';
-
+      const controls = createControls();
       controls.appendChild(createEditButton('Modifier', () => showEditPopup(element, index)));
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.textContent = '🗑️';
-      deleteBtn.onclick = () => {
-        formElements.splice(index, 1);
-        saveConfiguration();
-        renderConfigList();
-        renderForm();
-        updateColumnSelect();
-      };
-      controls.appendChild(deleteBtn);
+      controls.appendChild(createDeleteButton(index));
 
       div.appendChild(contentWrapper);
       div.appendChild(controls);
