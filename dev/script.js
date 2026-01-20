@@ -349,27 +349,16 @@ function applyGlobalStyles() {
 
 
 function updateColumnSelect() {
-  console.group('🔍 updateColumnSelect DEBUG');
-  console.log('columns (toutes):', columns);
-  console.log('columnMetadata:', columnMetadata);
-
   const usedColumns = formElements
     .filter(el => el.type === 'field')
     .map(el => el.fieldName);
-  console.log('usedColumns (dans form):', usedColumns);
 
   const availableColumns = columns.filter(col => {
+    if (usedColumns.includes(col)) return false;
     const meta = columnMetadata[col];
-    const isUsed = usedColumns.includes(col);
-    const isFormula = meta?.isFormula;
-    const isAttachment = meta?.isAttachment;
-    console.log(`  - ${col}: used=${isUsed}, formula=${isFormula}, attachment=${isAttachment}, meta=`, meta);
-    if (isUsed) return false;
-    if (isFormula || isAttachment) return false;
+    if (meta?.isFormula || meta?.isAttachment) return false;
     return true;
   });
-  console.log('availableColumns (filtrées):', availableColumns);
-  console.groupEnd();
 
   columnSelect.innerHTML = '';
 
@@ -1148,8 +1137,6 @@ async function getColumnMetadata() {
     const docInfo = await grist.docApi.fetchTable('_grist_Tables_column');
     const tablesInfo = await grist.docApi.fetchTable('_grist_Tables');
 
-    console.log('🔬 DEBUG _grist_Tables_column - toutes les clés disponibles:', Object.keys(docInfo));
-
     const metadata = {};
 
     const currentTableNumericId = tablesInfo.id[tablesInfo.tableId.indexOf(currentTableId)];
@@ -1159,12 +1146,6 @@ async function getColumnMetadata() {
 
       const colId = docInfo.colId[i];
       const type = docInfo.type[i];
-
-      // Debug pour voir les valeurs brutes
-      if (['hihi', 'NUMERUS', 'NO_FORMULA', 'INIT_FORMULA', 'FORMULA'].includes(colId)) {
-        console.log(`🔬 RAW ${colId}: isFormula=${docInfo.isFormula?.[i]}, formula="${docInfo.formula?.[i]}", recalcWhen=${docInfo.recalcWhen?.[i]}, recalcDeps=${docInfo.recalcDeps?.[i]}`);
-      }
-
       let choices = null;
       let refTable = null;
       let refChoices = [];

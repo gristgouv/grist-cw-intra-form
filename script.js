@@ -10,12 +10,17 @@ const allElementsContainer = document.getElementById('allElements');
 const popupOverlay = document.getElementById('popupOverlay');
 const formError = document.getElementById('formError');
 const formSuccess = document.getElementById('formSuccess');
+const fontSelect = document.getElementById('fontSelect');
+const paddingSelect = document.getElementById('paddingSelect');
+const formContainer = document.querySelector('.container');
 
 let columns = [];
 let columnMetadata = {};
 let formElements = [];
 let draggedElement = null;
 let initInProgress = false;
+let globalFont = '';
+let globalPadding = '';
 
 
 grist.ready({
@@ -274,7 +279,13 @@ async function loadConfiguration() {
   if (isFirstInstall) {
     console.warn('🔥 Initialisation automatique des colonnes');
 
-    formElements = columns.map(col => ({
+    // Filtrer les colonnes formule et pièces jointes
+    const editableColumns = columns.filter(col => {
+      const meta = columnMetadata[col];
+      return !meta?.isFormula && !meta?.isAttachment;
+    });
+
+    formElements = editableColumns.map(col => ({
       type: 'field',
       fieldName: col,
       fieldLabel: columnMetadata[col]?.label || col,
@@ -292,6 +303,17 @@ async function loadConfiguration() {
     formElements = options.formElements || [];
   }
 
+  // Charger les paramètres globaux
+  globalFont = options.globalFont || '';
+  globalPadding = options.globalPadding || '';
+
+  // Restaurer les sélecteurs
+  if (fontSelect) fontSelect.value = globalFont;
+  if (paddingSelect) paddingSelect.value = globalPadding;
+
+  // Appliquer les styles au form
+  applyGlobalStyles();
+
   console.log('formElements FINAL:', formElements);
 
   // ⚠️ RENDER TOUJOURS
@@ -305,8 +327,24 @@ async function loadConfiguration() {
 async function saveConfiguration() {
   await grist.setOptions({
     initialized: true,
-    formElements
+    formElements,
+    globalFont,
+    globalPadding
   });
+}
+
+function applyGlobalStyles() {
+  if (formContainer) {
+    formContainer.style.fontFamily = globalFont || '';
+
+    let padding = '';
+    switch (globalPadding) {
+      case 'small': padding = '12px'; break;
+      case 'medium': padding = '24px'; break;
+      case 'large': padding = '40px'; break;
+    }
+    formContainer.style.padding = padding || '24px';
+  }
 }
 
 
@@ -315,9 +353,12 @@ function updateColumnSelect() {
     .filter(el => el.type === 'field')
     .map(el => el.fieldName);
 
-  const availableColumns = columns.filter(
-    col => !usedColumns.includes(col)
-  );
+  const availableColumns = columns.filter(col => {
+    if (usedColumns.includes(col)) return false;
+    const meta = columnMetadata[col];
+    if (meta?.isFormula || meta?.isAttachment) return false;
+    return true;
+  });
 
   columnSelect.innerHTML = '';
 
@@ -342,15 +383,45 @@ function updateColumnSelect() {
   });
 }
 
-function showEditPopup(element, index) {
+function showEditPopup(element, index, propertyName = 'content') {
   const overlay = document.getElementById('popupOverlay');
   overlay.classList.add('show');
 
+  const isLabel = propertyName === 'fieldLabel';
+  const currentValue = isLabel ? (element.fieldLabel || element.fieldName) : (element.content || '');
+  const title = isLabel ? 'Modifier le libellé' : 'Modifier le contenu';
+
   const popup = document.createElement('div');
-  popup.className = 'edit-popup';
+  popup.className = 'edit-popup rich-editor';
   popup.innerHTML = `
-    <h3>Modifier le contenu</h3>
-    <textarea id="editContent">${element.content || ''}</textarea>
+    <h3>${title}</h3>
+    <div class="editor-toolbar">
+      <button type="button" class="toolbar-btn" data-cmd="bold" title="Gras (Ctrl+B)"><strong>B</strong></button>
+      <button type="button" class="toolbar-btn" data-cmd="italic" title="Italique (Ctrl+I)"><em>I</em></button>
+      <button type="button" class="toolbar-btn" data-cmd="underline" title="Souligné (Ctrl+U)"><u>U</u></button>
+      <span class="toolbar-sep"></span>
+      <button type="button" class="toolbar-btn" data-cmd="insertUnorderedList" title="Liste à puces">•</button>
+      <button type="button" class="toolbar-btn" id="linkBtn" title="Lien">🔗</button>
+      <button type="button" class="toolbar-btn" id="emojiBtn" title="Emoji">😀</button>
+      <span class="toolbar-sep"></span>
+      <select class="toolbar-select" id="formatSelect">
+        <option value="">Style</option>
+        <option value="h1">Titre 1</option>
+        <option value="h2">Titre 2</option>
+        <option value="h3">Titre 3</option>
+        <option value="p">Paragraphe</option>
+      </select>
+      <div class="color-picker-wrapper">
+        <button type="button" class="toolbar-btn" id="colorBtn" title="Couleur du texte"><span class="color-icon">A</span></button>
+        <div class="color-picker" id="colorPicker"></div>
+      </div>
+      <div class="color-picker-wrapper">
+        <button type="button" class="toolbar-btn" id="bgColorBtn" title="Couleur de fond"><span class="bg-color-icon">A</span></button>
+        <div class="color-picker" id="bgColorPicker"></div>
+      </div>
+    </div>
+    <div class="emoji-picker" id="emojiPickerPopup"></div>
+    <div id="editContent" class="rich-editor-content" contenteditable="true">${currentValue}</div>
     <div class="edit-popup-buttons">
       <button class="cancel">Annuler</button>
       <button class="save">Enregistrer</button>
@@ -359,9 +430,11 @@ function showEditPopup(element, index) {
 
   document.body.appendChild(popup);
 
-  const textarea = popup.querySelector('#editContent');
-  textarea.focus();
-  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  const editor = popup.querySelector('#editContent');
+  editor.focus();
+
+  // Initialiser les fonctionnalités de l'éditeur
+  initRichEditor(popup, editor);
 
   popup.querySelector('.cancel').addEventListener('click', () => {
     popup.remove();
@@ -369,9 +442,9 @@ function showEditPopup(element, index) {
   });
 
   popup.querySelector('.save').addEventListener('click', () => {
-    const newContent = document.getElementById('editContent').value.trim();
-    if (newContent) {
-      element.content = newContent;
+    const newContent = editor.innerHTML.trim();
+    if (newContent && newContent !== '<br>') {
+      element[propertyName] = newContent;
       saveConfiguration();
       renderConfigList();
       renderForm();
@@ -386,6 +459,147 @@ function showEditPopup(element, index) {
   });
 }
 
+// Emojis disponibles
+const emojis = [
+  '😀', '😃', '😄', '😁', '😊', '😍', '🥰', '😘',
+  '😂', '🤣', '😉', '😎', '🤔', '😐', '😑', '😶',
+  '🤝', '👍', '👎', '👏', '🙏', '💪', '✊', '👊',
+  '❤️', '💙', '💚', '💛', '🧡', '💜', '🖤', '💔',
+  '📊', '📈', '📉', '💼', '🏢', '⚙️', '🔧', '🛠️',
+  '✅', '❌', '⚠️', '⛔', '🚫', '💡', '🔔', '📢',
+  '🎯', '🎓', '🏆', '🥇', '⭐', '✨', '🔍', '📝'
+];
+
+// Couleurs prédéfinies
+const colors = [
+  '#000000', '#374151', '#6B7280', '#9CA3AF',
+  '#DC2626', '#EF4444', '#EA580C', '#F97316',
+  '#F59E0B', '#FBBF24', '#84CC16', '#10B981',
+  '#14B8A6', '#06B6D4', '#0EA5E9', '#3B82F6',
+  '#6366F1', '#8B5CF6', '#A855F7', '#EC4899'
+];
+
+function initRichEditor(popup, editor) {
+  // Boutons de formatage
+  popup.querySelectorAll('.toolbar-btn[data-cmd]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.execCommand(btn.dataset.cmd, false, null);
+      editor.focus();
+    });
+  });
+
+  // Sélecteur de style
+  const formatSelect = popup.querySelector('#formatSelect');
+  formatSelect.addEventListener('change', () => {
+    if (formatSelect.value) {
+      document.execCommand('formatBlock', false, formatSelect.value);
+      formatSelect.value = '';
+      editor.focus();
+    }
+  });
+
+  // Bouton lien
+  popup.querySelector('#linkBtn').addEventListener('click', () => {
+    const url = prompt('URL du lien:');
+    if (url) {
+      const selection = window.getSelection();
+      const text = selection.toString() || url;
+      const normalizedUrl = url.match(/^https?:\/\//) ? url : 'https://' + url;
+      document.execCommand('insertHTML', false, `<a href="${normalizedUrl}" target="_blank">${text}</a>`);
+    }
+    editor.focus();
+  });
+
+  // Emoji picker
+  const emojiBtn = popup.querySelector('#emojiBtn');
+  const emojiPicker = popup.querySelector('#emojiPickerPopup');
+  emojiPicker.innerHTML = emojis.map(e => `<button type="button" class="emoji-btn">${e}</button>`).join('');
+
+  emojiBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    emojiPicker.classList.toggle('show');
+  });
+
+  emojiPicker.querySelectorAll('.emoji-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.execCommand('insertText', false, btn.textContent);
+      emojiPicker.classList.remove('show');
+      editor.focus();
+    });
+  });
+
+  // Color picker
+  const colorBtn = popup.querySelector('#colorBtn');
+  const colorPicker = popup.querySelector('#colorPicker');
+  colorPicker.innerHTML = colors.map(c => `<button type="button" class="color-btn" style="background:${c}" data-color="${c}"></button>`).join('');
+
+  colorBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    colorPicker.classList.toggle('show');
+    popup.querySelector('#bgColorPicker').classList.remove('show');
+  });
+
+  colorPicker.querySelectorAll('.color-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.execCommand('foreColor', false, btn.dataset.color);
+      colorPicker.classList.remove('show');
+      editor.focus();
+    });
+  });
+
+  // Background color picker
+  const bgColorBtn = popup.querySelector('#bgColorBtn');
+  const bgColorPicker = popup.querySelector('#bgColorPicker');
+  bgColorPicker.innerHTML = colors.map(c => {
+    const r = parseInt(c.slice(1, 3), 16);
+    const g = parseInt(c.slice(3, 5), 16);
+    const b = parseInt(c.slice(5, 7), 16);
+    return `<button type="button" class="color-btn" style="background:${c}" data-color="rgba(${r},${g},${b},0.2)"></button>`;
+  }).join('');
+
+  bgColorBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    bgColorPicker.classList.toggle('show');
+    colorPicker.classList.remove('show');
+  });
+
+  bgColorPicker.querySelectorAll('.color-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.execCommand('backColor', false, btn.dataset.color);
+      bgColorPicker.classList.remove('show');
+      editor.focus();
+    });
+  });
+
+  // Fermer les pickers en cliquant ailleurs
+  popup.addEventListener('click', (e) => {
+    if (!e.target.closest('.color-picker-wrapper') && !e.target.closest('#emojiBtn')) {
+      colorPicker.classList.remove('show');
+      bgColorPicker.classList.remove('show');
+      emojiPicker.classList.remove('show');
+    }
+  });
+
+  // Raccourcis clavier
+  editor.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      switch (e.key.toLowerCase()) {
+        case 'b':
+          e.preventDefault();
+          document.execCommand('bold');
+          break;
+        case 'i':
+          e.preventDefault();
+          document.execCommand('italic');
+          break;
+        case 'u':
+          e.preventDefault();
+          document.execCommand('underline');
+          break;
+      }
+    }
+  });
+}
 
 function showValidationPopup(element, index) {
   const overlay = document.getElementById('popupOverlay');
@@ -578,6 +792,33 @@ function updateConditionalValues(fieldName, selectElement) {
   }
 }
 
+function createEditButton(tooltip, onClick) {
+  const btn = document.createElement('div');
+  btn.className = 'icon-btn';
+  btn.innerHTML = `✎<span class="tooltip">${tooltip}</span>`;
+  btn.onclick = onClick;
+  return btn;
+}
+
+function createControls() {
+  const controls = document.createElement('div');
+  controls.className = 'element-controls';
+  return controls;
+}
+
+function createDeleteButton(index) {
+  const btn = document.createElement('button');
+  btn.textContent = '🗑️';
+  btn.onclick = () => {
+    formElements.splice(index, 1);
+    saveConfiguration();
+    renderConfigList();
+    renderForm();
+    updateColumnSelect();
+  };
+  return btn;
+}
+
 function renderConfigList() {
   allElementsContainer.innerHTML = '';
 
@@ -607,41 +848,26 @@ function renderConfigList() {
       // Champ texte pur (pour multiligne)
       const isPureTextField = isTextOrNumericField && !meta.isNumeric && !meta.isInt;
 
-      const labelInput = document.createElement('input');
-      labelInput.type = 'text';
-      labelInput.className = 'field-label-input';
-      labelInput.value = element.fieldLabel || element.fieldName;
-      labelInput.onchange = (e) => {
-        element.fieldLabel = e.target.value;
-        saveConfiguration();
-        renderForm();
-      };
+      // Label
+      const labelWrapper = document.createElement('div');
+      labelWrapper.className = 'field-label-wrapper';
 
-      labelInput.addEventListener('mousedown', e => {
-        e.stopPropagation();
-      });
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'field-label-text';
+      labelSpan.innerHTML = element.fieldLabel || element.fieldName;
 
-      labelInput.addEventListener('click', e => {
-        e.stopPropagation();
-      });
-
-      labelInput.addEventListener('focus', () => {
-        div.draggable = false;
-      });
-
-      labelInput.addEventListener('blur', () => {
-        div.draggable = true;
-      });
-
+      labelWrapper.appendChild(labelSpan);
 
       preview.className = 'element-preview field';
       preview.textContent = `Id colonne : ${element.fieldName}`;
 
-      contentWrapper.appendChild(labelInput);
+      contentWrapper.appendChild(labelWrapper);
       contentWrapper.appendChild(preview);
 
-      const controls = document.createElement('div');
-      controls.className = 'element-controls';
+      const controls = createControls();
+
+      // Icône édition du libellé
+      controls.appendChild(createEditButton('Modifier le libellé', () => showEditPopup(element, index, 'fieldLabel')));
 
       // Icône requis (*)
       const requiredBtn = document.createElement('div');
@@ -701,17 +927,7 @@ function renderConfigList() {
       };
       controls.appendChild(filterBtn);
 
-      // Bouton supprimer
-      const deleteBtn = document.createElement('button');
-      deleteBtn.textContent = '🗑️';
-      deleteBtn.onclick = () => {
-        formElements.splice(index, 1);
-        saveConfiguration();
-        renderConfigList();
-        renderForm();
-        updateColumnSelect();
-      };
-      controls.appendChild(deleteBtn);
+      controls.appendChild(createDeleteButton(index));
 
       div.appendChild(contentWrapper);
       div.appendChild(controls);
@@ -719,69 +935,30 @@ function renderConfigList() {
       preview.className = 'element-preview separator';
       contentWrapper.appendChild(preview);
 
-      const controls = document.createElement('div');
-      controls.className = 'element-controls';
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.textContent = '🗑️';
-      deleteBtn.onclick = () => {
-        formElements.splice(index, 1);
-        saveConfiguration();
-        renderConfigList();
-        renderForm();
-        updateColumnSelect();
-      };
-      controls.appendChild(deleteBtn);
+      const controls = createControls();
+      controls.appendChild(createDeleteButton(index));
 
       div.appendChild(contentWrapper);
       div.appendChild(controls);
     } else if (element.type === 'title') {
       preview.className = 'element-preview title';
-      preview.innerHTML = `${element.content}<span class="edit-icon" onclick="event.stopPropagation();">✎</span>`;
-      preview.querySelector('.edit-icon').onclick = (e) => {
-        e.stopPropagation();
-        showEditPopup(element, index);
-      };
+      preview.innerHTML = element.content;
       contentWrapper.appendChild(preview);
 
-      const controls = document.createElement('div');
-      controls.className = 'element-controls';
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.textContent = '🗑️';
-      deleteBtn.onclick = () => {
-        formElements.splice(index, 1);
-        saveConfiguration();
-        renderConfigList();
-        renderForm();
-        updateColumnSelect();
-      };
-      controls.appendChild(deleteBtn);
+      const controls = createControls();
+      controls.appendChild(createEditButton('Modifier', () => showEditPopup(element, index)));
+      controls.appendChild(createDeleteButton(index));
 
       div.appendChild(contentWrapper);
       div.appendChild(controls);
     } else if (element.type === 'text') {
       preview.className = 'element-preview text';
-      preview.innerHTML = `${element.content}<span class="edit-icon" onclick="event.stopPropagation();">✎</span>`;
-      preview.querySelector('.edit-icon').onclick = (e) => {
-        e.stopPropagation();
-        showEditPopup(element, index);
-      };
+      preview.innerHTML = element.content;
       contentWrapper.appendChild(preview);
 
-      const controls = document.createElement('div');
-      controls.className = 'element-controls';
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.textContent = '🗑️';
-      deleteBtn.onclick = () => {
-        formElements.splice(index, 1);
-        saveConfiguration();
-        renderConfigList();
-        renderForm();
-        updateColumnSelect();
-      };
-      controls.appendChild(deleteBtn);
+      const controls = createControls();
+      controls.appendChild(createEditButton('Modifier', () => showEditPopup(element, index)));
+      controls.appendChild(createDeleteButton(index));
 
       div.appendChild(contentWrapper);
       div.appendChild(controls);
@@ -891,7 +1068,7 @@ elementType.addEventListener('change', () => {
     // Rien
   } else if (elementType.value) {
     elementContent.style.display = 'block';
-    elementContent.placeholder = elementType.value === 'title' ? 'Titre' : 'Texte';
+    elementContent.placeholder = 'Texte';
   }
 });
 
@@ -940,12 +1117,26 @@ configModal.addEventListener('click', (e) => {
   if (e.target === configModal) configModal.classList.remove('show');
 });
 
+// Event listeners pour les paramètres globaux
+fontSelect.addEventListener('change', () => {
+  globalFont = fontSelect.value;
+  applyGlobalStyles();
+  saveConfiguration();
+});
+
+paddingSelect.addEventListener('change', () => {
+  globalPadding = paddingSelect.value;
+  applyGlobalStyles();
+  saveConfiguration();
+});
+
 async function getColumnMetadata() {
   try {
     const table = await grist.getTable();
     const currentTableId = await table._platform.getTableId();
     const docInfo = await grist.docApi.fetchTable('_grist_Tables_column');
     const tablesInfo = await grist.docApi.fetchTable('_grist_Tables');
+
     const metadata = {};
 
     const currentTableNumericId = tablesInfo.id[tablesInfo.tableId.indexOf(currentTableId)];
@@ -993,7 +1184,9 @@ async function getColumnMetadata() {
         isBool: type === 'Bool',
         isDate: type === 'Date' || type === 'DateTime',
         isNumeric: type === 'Numeric',
-        isInt: type === 'Int'
+        isInt: type === 'Int',
+        isFormula: docInfo.isFormula?.[i] === true && docInfo.formula?.[i]?.length > 0,
+        isAttachment: type === 'Attachments'
       };
     }
 
@@ -1081,7 +1274,9 @@ async function getColumnMetadataViaREST() {
         isBool: type === 'Bool',
         isDate: type === 'Date' || type === 'DateTime',
         isNumeric: type === 'Numeric',
-        isInt: type === 'Int'
+        isInt: type === 'Int',
+        isFormula: col.fields.isFormula === true && col.fields.formula?.length > 0,
+        isAttachment: type === 'Attachments'
       };
     }
 
@@ -1306,12 +1501,12 @@ function renderForm() {
     } else if (element.type === 'title') {
       const title = document.createElement('div');
       title.className = 'custom-title';
-      title.textContent = element.content;
+      title.innerHTML = element.content;
       fieldsContainer.appendChild(title);
     } else if (element.type === 'text') {
       const text = document.createElement('div');
       text.className = 'custom-text';
-      text.textContent = element.content;
+      text.innerHTML = element.content;
       fieldsContainer.appendChild(text);
     } else if (element.type === 'field') {
       const col = element.fieldName;
@@ -1327,9 +1522,9 @@ function renderForm() {
       }
 
       const label = document.createElement('label');
-      label.textContent = element.fieldLabel || col;
+      label.innerHTML = element.fieldLabel || col;
       if (element.required) {
-        label.textContent += ' *';
+        label.innerHTML += ' <span class="required-star">*</span>';
       }
 
       const inp = createInputForColumn(col, meta, element);
