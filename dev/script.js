@@ -374,14 +374,18 @@ function updateColumnSelect() {
   });
 }
 
-function showEditPopup(element, index) {
+function showEditPopup(element, index, propertyName = 'content') {
   const overlay = document.getElementById('popupOverlay');
   overlay.classList.add('show');
+
+  const isLabel = propertyName === 'fieldLabel';
+  const currentValue = isLabel ? (element.fieldLabel || element.fieldName) : (element.content || '');
+  const title = isLabel ? 'Modifier le libellé' : 'Modifier le contenu';
 
   const popup = document.createElement('div');
   popup.className = 'edit-popup rich-editor';
   popup.innerHTML = `
-    <h3>Modifier le contenu</h3>
+    <h3>${title}</h3>
     <div class="editor-toolbar">
       <button type="button" class="toolbar-btn" data-cmd="bold" title="Gras (Ctrl+B)"><strong>B</strong></button>
       <button type="button" class="toolbar-btn" data-cmd="italic" title="Italique (Ctrl+I)"><em>I</em></button>
@@ -408,7 +412,7 @@ function showEditPopup(element, index) {
       </div>
     </div>
     <div class="emoji-picker" id="emojiPickerPopup"></div>
-    <div id="editContent" class="rich-editor-content" contenteditable="true">${element.content || ''}</div>
+    <div id="editContent" class="rich-editor-content" contenteditable="true">${currentValue}</div>
     <div class="edit-popup-buttons">
       <button class="cancel">Annuler</button>
       <button class="save">Enregistrer</button>
@@ -431,7 +435,7 @@ function showEditPopup(element, index) {
   popup.querySelector('.save').addEventListener('click', () => {
     const newContent = editor.innerHTML.trim();
     if (newContent && newContent !== '<br>') {
-      element.content = newContent;
+      element[propertyName] = newContent;
       saveConfiguration();
       renderConfigList();
       renderForm();
@@ -808,37 +812,29 @@ function renderConfigList() {
       // Champ texte pur (pour multiligne)
       const isPureTextField = isTextOrNumericField && !meta.isNumeric && !meta.isInt;
 
-      const labelInput = document.createElement('input');
-      labelInput.type = 'text';
-      labelInput.className = 'field-label-input';
-      labelInput.value = element.fieldLabel || element.fieldName;
-      labelInput.onchange = (e) => {
-        element.fieldLabel = e.target.value;
-        saveConfiguration();
-        renderForm();
+      // Label avec icône d'édition
+      const labelWrapper = document.createElement('div');
+      labelWrapper.className = 'field-label-wrapper';
+
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'field-label-text';
+      labelSpan.innerHTML = element.fieldLabel || element.fieldName;
+
+      const editLabelBtn = document.createElement('div');
+      editLabelBtn.className = 'icon-btn edit-label-btn';
+      editLabelBtn.innerHTML = `✎<span class="tooltip">Modifier le libellé</span>`;
+      editLabelBtn.onclick = (e) => {
+        e.stopPropagation();
+        showEditPopup(element, index, 'fieldLabel');
       };
 
-      labelInput.addEventListener('mousedown', e => {
-        e.stopPropagation();
-      });
-
-      labelInput.addEventListener('click', e => {
-        e.stopPropagation();
-      });
-
-      labelInput.addEventListener('focus', () => {
-        div.draggable = false;
-      });
-
-      labelInput.addEventListener('blur', () => {
-        div.draggable = true;
-      });
-
+      labelWrapper.appendChild(labelSpan);
+      labelWrapper.appendChild(editLabelBtn);
 
       preview.className = 'element-preview field';
       preview.textContent = `Id colonne : ${element.fieldName}`;
 
-      contentWrapper.appendChild(labelInput);
+      contentWrapper.appendChild(labelWrapper);
       contentWrapper.appendChild(preview);
 
       const controls = document.createElement('div');
@@ -1545,9 +1541,9 @@ function renderForm() {
       }
 
       const label = document.createElement('label');
-      label.textContent = element.fieldLabel || col;
+      label.innerHTML = element.fieldLabel || col;
       if (element.required) {
-        label.textContent += ' *';
+        label.innerHTML += ' <span class="required-star">*</span>';
       }
 
       const inp = createInputForColumn(col, meta, element);
