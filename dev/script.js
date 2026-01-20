@@ -349,16 +349,27 @@ function applyGlobalStyles() {
 
 
 function updateColumnSelect() {
+  console.group('🔍 updateColumnSelect DEBUG');
+  console.log('columns (toutes):', columns);
+  console.log('columnMetadata:', columnMetadata);
+
   const usedColumns = formElements
     .filter(el => el.type === 'field')
     .map(el => el.fieldName);
+  console.log('usedColumns (dans form):', usedColumns);
 
   const availableColumns = columns.filter(col => {
-    if (usedColumns.includes(col)) return false;
     const meta = columnMetadata[col];
-    if (meta?.isFormula || meta?.isAttachment) return false;
+    const isUsed = usedColumns.includes(col);
+    const isFormula = meta?.isFormula;
+    const isAttachment = meta?.isAttachment;
+    console.log(`  - ${col}: used=${isUsed}, formula=${isFormula}, attachment=${isAttachment}, meta=`, meta);
+    if (isUsed) return false;
+    if (isFormula || isAttachment) return false;
     return true;
   });
+  console.log('availableColumns (filtrées):', availableColumns);
+  console.groupEnd();
 
   columnSelect.innerHTML = '';
 
