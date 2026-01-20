@@ -783,6 +783,14 @@ function updateConditionalValues(fieldName, selectElement) {
   }
 }
 
+function createEditButton(tooltip, onClick) {
+  const btn = document.createElement('div');
+  btn.className = 'icon-btn';
+  btn.innerHTML = `✎<span class="tooltip">${tooltip}</span>`;
+  btn.onclick = onClick;
+  return btn;
+}
+
 function renderConfigList() {
   allElementsContainer.innerHTML = '';
 
@@ -830,6 +838,9 @@ function renderConfigList() {
 
       const controls = document.createElement('div');
       controls.className = 'element-controls';
+
+      // Icône édition du libellé
+      controls.appendChild(createEditButton('Modifier le libellé', () => showEditPopup(element, index, 'fieldLabel')));
 
       // Icône requis (*)
       const requiredBtn = document.createElement('div');
@@ -889,15 +900,6 @@ function renderConfigList() {
       };
       controls.appendChild(filterBtn);
 
-      // Icône édition du libellé
-      const editLabelBtn = document.createElement('div');
-      editLabelBtn.className = 'icon-btn';
-      editLabelBtn.innerHTML = `✎<span class="tooltip">Modifier le libellé</span>`;
-      editLabelBtn.onclick = () => {
-        showEditPopup(element, index, 'fieldLabel');
-      };
-      controls.appendChild(editLabelBtn);
-
       // Bouton supprimer
       const deleteBtn = document.createElement('button');
       deleteBtn.textContent = '🗑️';
@@ -940,11 +942,7 @@ function renderConfigList() {
       const controls = document.createElement('div');
       controls.className = 'element-controls';
 
-      const editBtn = document.createElement('div');
-      editBtn.className = 'icon-btn';
-      editBtn.innerHTML = `✎<span class="tooltip">Modifier</span>`;
-      editBtn.onclick = () => showEditPopup(element, index);
-      controls.appendChild(editBtn);
+      controls.appendChild(createEditButton('Modifier', () => showEditPopup(element, index)));
 
       const deleteBtn = document.createElement('button');
       deleteBtn.textContent = '🗑️';
@@ -967,11 +965,7 @@ function renderConfigList() {
       const controls = document.createElement('div');
       controls.className = 'element-controls';
 
-      const editBtn = document.createElement('div');
-      editBtn.className = 'icon-btn';
-      editBtn.innerHTML = `✎<span class="tooltip">Modifier</span>`;
-      editBtn.onclick = () => showEditPopup(element, index);
-      controls.appendChild(editBtn);
+      controls.appendChild(createEditButton('Modifier', () => showEditPopup(element, index)));
 
       const deleteBtn = document.createElement('button');
       deleteBtn.textContent = '🗑️';
