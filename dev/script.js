@@ -1206,7 +1206,7 @@ async function getColumnMetadata() {
         isDate: type === 'Date' || type === 'DateTime',
         isNumeric: type === 'Numeric',
         isInt: type === 'Int',
-        isFormula: docInfo.isFormula?.[i] === true,
+        isFormula: docInfo.isFormula?.[i] === true && docInfo.formula?.[i]?.length > 0,
         isAttachment: type === 'Attachments'
       };
     }
@@ -1296,7 +1296,7 @@ async function getColumnMetadataViaREST() {
         isDate: type === 'Date' || type === 'DateTime',
         isNumeric: type === 'Numeric',
         isInt: type === 'Int',
-        isFormula: col.fields.isFormula === true,
+        isFormula: col.fields.isFormula === true && col.fields.formula?.length > 0,
         isAttachment: type === 'Attachments'
       };
     }
