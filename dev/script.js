@@ -600,9 +600,12 @@ function renderConfigList() {
 
     if (element.type === 'field') {
       const meta = columnMetadata[element.fieldName] || {};
-      const isTextField = !meta.isBool && !meta.isDate && !meta.isMultiple &&
+      // Champ texte ou numérique (pour validation max caractères)
+      const isTextOrNumericField = !meta.isBool && !meta.isDate && !meta.isMultiple &&
         (!meta.choices || meta.choices.length === 0) &&
         (!meta.isRef || meta.refChoices.length === 0);
+      // Champ texte pur (pour multiligne)
+      const isPureTextField = isTextOrNumericField && !meta.isNumeric && !meta.isInt;
 
       const labelInput = document.createElement('input');
       labelInput.type = 'text';
@@ -655,8 +658,8 @@ function renderConfigList() {
       };
       controls.appendChild(requiredBtn);
 
-      // Icône validation (texte uniquement)
-      if (isTextField) {
+      // Icône validation (texte et numérique)
+      if (isTextOrNumericField) {
         const validationBtn = document.createElement('div');
         validationBtn.className = 'icon-btn' + (element.maxLength ? ' active' : '');
         validationBtn.innerHTML = `
@@ -667,8 +670,10 @@ function renderConfigList() {
           showValidationPopup(element, index);
         };
         controls.appendChild(validationBtn);
+      }
 
-        // Icône multiligne (texte uniquement)
+      // Icône multiligne (texte pur uniquement)
+      if (isPureTextField) {
         const multilineBtn = document.createElement('div');
         multilineBtn.className = 'icon-btn' + (element.multiline ? ' active' : '');
         multilineBtn.innerHTML = `
