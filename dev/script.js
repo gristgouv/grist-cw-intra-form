@@ -812,7 +812,7 @@ function renderConfigList() {
       // Champ texte pur (pour multiligne)
       const isPureTextField = isTextOrNumericField && !meta.isNumeric && !meta.isInt;
 
-      // Label avec icône d'édition
+      // Label
       const labelWrapper = document.createElement('div');
       labelWrapper.className = 'field-label-wrapper';
 
@@ -820,16 +820,7 @@ function renderConfigList() {
       labelSpan.className = 'field-label-text';
       labelSpan.innerHTML = element.fieldLabel || element.fieldName;
 
-      const editLabelBtn = document.createElement('div');
-      editLabelBtn.className = 'icon-btn edit-label-btn';
-      editLabelBtn.innerHTML = `✎<span class="tooltip">Modifier le libellé</span>`;
-      editLabelBtn.onclick = (e) => {
-        e.stopPropagation();
-        showEditPopup(element, index, 'fieldLabel');
-      };
-
       labelWrapper.appendChild(labelSpan);
-      labelWrapper.appendChild(editLabelBtn);
 
       preview.className = 'element-preview field';
       preview.textContent = `Id colonne : ${element.fieldName}`;
@@ -897,6 +888,15 @@ function renderConfigList() {
         showFilterPopup(element, index);
       };
       controls.appendChild(filterBtn);
+
+      // Icône édition du libellé
+      const editLabelBtn = document.createElement('div');
+      editLabelBtn.className = 'icon-btn';
+      editLabelBtn.innerHTML = `✎<span class="tooltip">Modifier le libellé</span>`;
+      editLabelBtn.onclick = () => {
+        showEditPopup(element, index, 'fieldLabel');
+      };
+      controls.appendChild(editLabelBtn);
 
       // Bouton supprimer
       const deleteBtn = document.createElement('button');
