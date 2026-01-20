@@ -1147,6 +1147,11 @@ async function getColumnMetadata() {
     const currentTableId = await table._platform.getTableId();
     const docInfo = await grist.docApi.fetchTable('_grist_Tables_column');
     const tablesInfo = await grist.docApi.fetchTable('_grist_Tables');
+
+    console.log('🔬 DEBUG docInfo keys:', Object.keys(docInfo));
+    console.log('🔬 DEBUG docInfo.isFormula:', docInfo.isFormula);
+    console.log('🔬 DEBUG docInfo.formula:', docInfo.formula);
+
     const metadata = {};
 
     const currentTableNumericId = tablesInfo.id[tablesInfo.tableId.indexOf(currentTableId)];
@@ -1156,6 +1161,12 @@ async function getColumnMetadata() {
 
       const colId = docInfo.colId[i];
       const type = docInfo.type[i];
+
+      // Debug pour voir les valeurs brutes
+      if (colId === 'hihi' || colId === 'NUMERUS') {
+        console.log(`🔬 RAW ${colId}: isFormula=${docInfo.isFormula?.[i]}, formula="${docInfo.formula?.[i]}"`);
+      }
+
       let choices = null;
       let refTable = null;
       let refChoices = [];
