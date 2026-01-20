@@ -1148,9 +1148,7 @@ async function getColumnMetadata() {
     const docInfo = await grist.docApi.fetchTable('_grist_Tables_column');
     const tablesInfo = await grist.docApi.fetchTable('_grist_Tables');
 
-    console.log('🔬 DEBUG docInfo keys:', Object.keys(docInfo));
-    console.log('🔬 DEBUG docInfo.isFormula:', docInfo.isFormula);
-    console.log('🔬 DEBUG docInfo.formula:', docInfo.formula);
+    console.log('🔬 DEBUG _grist_Tables_column - toutes les clés disponibles:', Object.keys(docInfo));
 
     const metadata = {};
 
