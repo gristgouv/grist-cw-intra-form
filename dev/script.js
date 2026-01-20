@@ -737,15 +737,17 @@ function renderConfigList() {
       div.appendChild(controls);
     } else if (element.type === 'title') {
       preview.className = 'element-preview title';
-      preview.innerHTML = `${element.content}<span class="edit-icon" onclick="event.stopPropagation();">✎</span>`;
-      preview.querySelector('.edit-icon').onclick = (e) => {
-        e.stopPropagation();
-        showEditPopup(element, index);
-      };
+      preview.textContent = element.content;
       contentWrapper.appendChild(preview);
 
       const controls = document.createElement('div');
       controls.className = 'element-controls';
+
+      const editBtn = document.createElement('div');
+      editBtn.className = 'icon-btn';
+      editBtn.innerHTML = `✎<span class="tooltip">Modifier</span>`;
+      editBtn.onclick = () => showEditPopup(element, index);
+      controls.appendChild(editBtn);
 
       const deleteBtn = document.createElement('button');
       deleteBtn.textContent = '🗑️';
@@ -762,15 +764,17 @@ function renderConfigList() {
       div.appendChild(controls);
     } else if (element.type === 'text') {
       preview.className = 'element-preview text';
-      preview.innerHTML = `${element.content}<span class="edit-icon" onclick="event.stopPropagation();">✎</span>`;
-      preview.querySelector('.edit-icon').onclick = (e) => {
-        e.stopPropagation();
-        showEditPopup(element, index);
-      };
+      preview.textContent = element.content;
       contentWrapper.appendChild(preview);
 
       const controls = document.createElement('div');
       controls.className = 'element-controls';
+
+      const editBtn = document.createElement('div');
+      editBtn.className = 'icon-btn';
+      editBtn.innerHTML = `✎<span class="tooltip">Modifier</span>`;
+      editBtn.onclick = () => showEditPopup(element, index);
+      controls.appendChild(editBtn);
 
       const deleteBtn = document.createElement('button');
       deleteBtn.textContent = '🗑️';
