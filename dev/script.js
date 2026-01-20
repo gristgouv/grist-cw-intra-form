@@ -1163,8 +1163,8 @@ async function getColumnMetadata() {
       const type = docInfo.type[i];
 
       // Debug pour voir les valeurs brutes
-      if (colId === 'hihi' || colId === 'NUMERUS') {
-        console.log(`🔬 RAW ${colId}: isFormula=${docInfo.isFormula?.[i]}, formula="${docInfo.formula?.[i]}"`);
+      if (['hihi', 'NUMERUS', 'NO_FORMULA', 'INIT_FORMULA', 'FORMULA'].includes(colId)) {
+        console.log(`🔬 RAW ${colId}: isFormula=${docInfo.isFormula?.[i]}, formula="${docInfo.formula?.[i]}", recalcWhen=${docInfo.recalcWhen?.[i]}, recalcDeps=${docInfo.recalcDeps?.[i]}`);
       }
 
       let choices = null;
