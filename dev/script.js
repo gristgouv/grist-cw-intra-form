@@ -1096,7 +1096,7 @@ elementType.addEventListener('change', () => {
     // Rien
   } else if (elementType.value) {
     elementContent.style.display = 'block';
-    elementContent.placeholder = elementType.value === 'title' ? 'Titre' : 'Texte';
+    elementContent.placeholder = 'Texte';
   }
 });
 
