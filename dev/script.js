@@ -667,6 +667,21 @@ function renderConfigList() {
           showValidationPopup(element, index);
         };
         controls.appendChild(validationBtn);
+
+        // Icône multiligne (texte uniquement)
+        const multilineBtn = document.createElement('div');
+        multilineBtn.className = 'icon-btn' + (element.multiline ? ' active' : '');
+        multilineBtn.innerHTML = `
+          ≡
+          <span class="tooltip">Multiligne</span>
+        `;
+        multilineBtn.onclick = () => {
+          element.multiline = !element.multiline;
+          saveConfiguration();
+          renderConfigList();
+          renderForm();
+        };
+        controls.appendChild(multilineBtn);
       }
 
       // Icône filtre
@@ -1079,7 +1094,7 @@ async function getColumnMetadataViaREST() {
   }
 }
 
-function createInputForColumn(col, meta) {
+function createInputForColumn(col, meta, element = {}) {
   let inp;
 
   if (meta.isBool) {
@@ -1144,6 +1159,14 @@ function createInputForColumn(col, meta) {
       o.textContent = opt.label;
       inp.appendChild(o);
     });
+    return inp;
+  }
+
+  // Champ texte multiligne ou simple
+  if (element.multiline) {
+    inp = document.createElement('textarea');
+    inp.id = `input_${col}`;
+    inp.rows = 4;
     return inp;
   }
 
@@ -1308,7 +1331,7 @@ function renderForm() {
         label.textContent += ' *';
       }
 
-      const inp = createInputForColumn(col, meta);
+      const inp = createInputForColumn(col, meta, element);
 
       // Ajouter un event listener pour mettre à jour l'affichage conditionnel
       inp.addEventListener('change', () => {
