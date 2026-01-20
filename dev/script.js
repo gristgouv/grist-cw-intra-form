@@ -279,7 +279,13 @@ async function loadConfiguration() {
   if (isFirstInstall) {
     console.warn('🔥 Initialisation automatique des colonnes');
 
-    formElements = columns.map(col => ({
+    // Filtrer les colonnes formule et pièces jointes
+    const editableColumns = columns.filter(col => {
+      const meta = columnMetadata[col];
+      return !meta?.isFormula && !meta?.isAttachment;
+    });
+
+    formElements = editableColumns.map(col => ({
       type: 'field',
       fieldName: col,
       fieldLabel: columnMetadata[col]?.label || col,
@@ -347,9 +353,12 @@ function updateColumnSelect() {
     .filter(el => el.type === 'field')
     .map(el => el.fieldName);
 
-  const availableColumns = columns.filter(
-    col => !usedColumns.includes(col)
-  );
+  const availableColumns = columns.filter(col => {
+    if (usedColumns.includes(col)) return false;
+    const meta = columnMetadata[col];
+    if (meta?.isFormula || meta?.isAttachment) return false;
+    return true;
+  });
 
   columnSelect.innerHTML = '';
 
@@ -1174,7 +1183,9 @@ async function getColumnMetadata() {
         isBool: type === 'Bool',
         isDate: type === 'Date' || type === 'DateTime',
         isNumeric: type === 'Numeric',
-        isInt: type === 'Int'
+        isInt: type === 'Int',
+        isFormula: docInfo.isFormula?.[i] === true || (docInfo.formula?.[i] && docInfo.formula[i].length > 0),
+        isAttachment: type === 'Attachments'
       };
     }
 
@@ -1262,7 +1273,9 @@ async function getColumnMetadataViaREST() {
         isBool: type === 'Bool',
         isDate: type === 'Date' || type === 'DateTime',
         isNumeric: type === 'Numeric',
-        isInt: type === 'Int'
+        isInt: type === 'Int',
+        isFormula: col.fields.isFormula === true || (col.fields.formula && col.fields.formula.length > 0),
+        isAttachment: type === 'Attachments'
       };
     }
 
