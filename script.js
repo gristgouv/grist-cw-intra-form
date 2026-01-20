@@ -277,7 +277,7 @@ async function loadConfiguration() {
     formElements = columns.map(col => ({
       type: 'field',
       fieldName: col,
-      fieldLabel: col,
+      fieldLabel: columnMetadata[col]?.label || col,
       required: false,
       maxLength: null,
       conditional: null
@@ -914,7 +914,7 @@ addElementBtn.addEventListener('click', () => {
     formElements.push({
       type: 'field',
       fieldName: col,
-      fieldLabel: col,
+      fieldLabel: columnMetadata[col]?.label || col,
       required: false,
       maxLength: null,
       conditional: null
@@ -991,6 +991,7 @@ async function getColumnMetadata() {
       metadata[colId] = {
         type,
         choices,
+        label: docInfo.label?.[i] || colId,
         isMultiple: type === 'ChoiceList' || type.startsWith('RefList:'),
         isRef: type.startsWith('Ref:') || type.startsWith('RefList:'),
         refTable,
@@ -1078,6 +1079,7 @@ async function getColumnMetadataViaREST() {
       metadata[colId] = {
         type,
         choices,
+        label: col.fields.label || colId,
         isMultiple: type === 'ChoiceList' || type.startsWith('RefList:'),
         isRef: type.startsWith('Ref:') || type.startsWith('RefList:'),
         refTable,
