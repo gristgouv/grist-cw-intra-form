@@ -737,10 +737,7 @@ function renderConfigList() {
       div.appendChild(controls);
     } else if (element.type === 'title') {
       preview.className = 'element-preview title';
-      preview.innerHTML = `
-        ${element.content}
-        <span class="edit-icon" onclick="event.stopPropagation();">✎</span>
-      `;
+      preview.innerHTML = `${element.content}<span class="edit-icon" onclick="event.stopPropagation();">✎</span>`;
       preview.querySelector('.edit-icon').onclick = (e) => {
         e.stopPropagation();
         showEditPopup(element, index);
@@ -765,10 +762,7 @@ function renderConfigList() {
       div.appendChild(controls);
     } else if (element.type === 'text') {
       preview.className = 'element-preview text';
-      preview.innerHTML = `
-        ${element.content}
-        <span class="edit-icon" onclick="event.stopPropagation();">✎</span>
-      `;
+      preview.innerHTML = `${element.content}<span class="edit-icon" onclick="event.stopPropagation();">✎</span>`;
       preview.querySelector('.edit-icon').onclick = (e) => {
         e.stopPropagation();
         showEditPopup(element, index);
