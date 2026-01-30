@@ -964,6 +964,15 @@ async function getColumnMetadata() {
 
     const currentTableNumericId = tablesInfo.id[tablesInfo.tableId.indexOf(currentTableId)];
 
+    // Construire un index des colonnes par leur id numérique pour résoudre visibleCol
+    const colById = {};
+    for (let i = 0; i < docInfo.id.length; i++) {
+      colById[docInfo.id[i]] = {
+        colId: docInfo.colId[i],
+        parentId: docInfo.parentId[i]
+      };
+    }
+
     for (let i = 0; i < docInfo.colId.length; i++) {
       if (docInfo.parentId[i] !== currentTableNumericId) continue;
 
@@ -989,9 +998,23 @@ async function getColumnMetadata() {
       if (refTable) {
         try {
           const refData = await grist.docApi.fetchTable(refTable);
+
+          // Récupérer la colonne d'affichage (visibleCol) configurée dans Grist
+          let displayColId = null;
+          const visibleColRef = docInfo.visibleCol?.[i];
+
+          if (visibleColRef && visibleColRef !== 0 && colById[visibleColRef]) {
+            displayColId = colById[visibleColRef].colId;
+          }
+
+          // Fallback: première colonne non-système si pas de visibleCol
+          if (!displayColId || !refData[displayColId]) {
+            displayColId = Object.keys(refData).find(k => k !== 'id' && k !== 'manualSort');
+          }
+
           refChoices = refData.id.map((id, idx) => ({
             id: id,
-            label: refData[Object.keys(refData).find(k => k !== 'id' && k !== 'manualSort')]?.[idx] || id
+            label: displayColId && refData[displayColId] ? refData[displayColId][idx] : id
           }));
         } catch (e) { }
       }
@@ -1015,100 +1038,7 @@ async function getColumnMetadata() {
 
     return metadata;
   } catch (error) {
-    // Fallback via API REST si permissions bloquent tables système
-    console.warn('⚠️ Fallback API REST pour metadata:', error.message);
-    return getColumnMetadataViaREST();
-  }
-}
-
-// Fallback API REST pour les métadonnées
-async function getColumnMetadataViaREST() {
-  try {
-    console.log('🔄 getColumnMetadataViaREST: début');
-
-    const tableId = await grist.selectedTable.getTableId();
-    console.log('📍 tableId:', tableId);
-
-    const tokenInfo = await grist.docApi.getAccessToken({ readOnly: true });
-    console.log('🔑 baseUrl:', tokenInfo.baseUrl);
-
-    const url = `${tokenInfo.baseUrl}/tables/${tableId}/columns`;
-    console.log('🌐 Fetching:', url);
-
-    const response = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${tokenInfo.token}` }
-    });
-
-    console.log('📡 Response status:', response.status);
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-
-    const data = await response.json();
-    console.log('📦 API data:', data);
-
-    const metadata = {};
-
-    for (const col of data.columns) {
-      const colId = col.id;
-      if (colId === 'id' || colId === 'manualSort' || colId.startsWith('gristHelper')) continue;
-
-      const type = col.fields.type || 'Text';
-      let choices = null;
-      let refTable = null;
-      let refChoices = [];
-
-      if (col.fields.widgetOptions) {
-        try {
-          const options = typeof col.fields.widgetOptions === 'string'
-            ? JSON.parse(col.fields.widgetOptions)
-            : col.fields.widgetOptions;
-          if (options.choices) choices = options.choices;
-        } catch (e) { }
-      }
-
-      if (type.startsWith('Ref:')) {
-        refTable = type.substring(4);
-      } else if (type.startsWith('RefList:')) {
-        refTable = type.substring(8);
-      }
-
-      if (refTable) {
-        try {
-          const refResponse = await fetch(`${tokenInfo.baseUrl}/tables/${refTable}/records`, {
-            headers: { 'Authorization': `Bearer ${tokenInfo.token}` }
-          });
-          if (refResponse.ok) {
-            const refData = await refResponse.json();
-            refChoices = refData.records.map(record => {
-              const labelKey = Object.keys(record.fields).find(k => k !== 'id' && k !== 'manualSort');
-              return { id: record.id, label: labelKey ? record.fields[labelKey] : record.id };
-            });
-          }
-        } catch (e) { }
-      }
-
-      metadata[colId] = {
-        type,
-        choices,
-        label: col.fields.label || colId,
-        isMultiple: type === 'ChoiceList' || type.startsWith('RefList:'),
-        isRef: type.startsWith('Ref:') || type.startsWith('RefList:'),
-        refTable,
-        refChoices,
-        isBool: type === 'Bool',
-        isDate: type === 'Date' || type === 'DateTime',
-        isNumeric: type === 'Numeric',
-        isInt: type === 'Int',
-        isFormula: col.fields.isFormula === true && col.fields.formula?.length > 0,
-        isAttachment: type === 'Attachments'
-      };
-    }
-
-    return metadata;
-  } catch (error) {
-    console.error("❌ Erreur API REST metadata:", error);
-    console.error("❌ Error name:", error.name);
-    console.error("❌ Error message:", error.message);
-    console.error("❌ Error stack:", error.stack);
+    console.error('❌ Erreur récupération metadata:', error.message);
     return {};
   }
 }
