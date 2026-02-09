@@ -21,6 +21,79 @@ let draggedElement = null;
 let initInProgress = false;
 let globalFont = '';
 let globalPadding = '';
+let pendingAttachments = {}; // Stockage temporaire des PJ par colonne
+
+function renderAttachmentList(col, container) {
+  container.innerHTML = '';
+
+  pendingAttachments[col].forEach((file, index) => {
+    const fileItem = document.createElement('div');
+    fileItem.className = 'attachment-item';
+
+    const fileName = document.createElement('span');
+    fileName.className = 'attachment-name';
+    fileName.textContent = file.name;
+
+    const fileSize = document.createElement('span');
+    fileSize.className = 'attachment-size';
+    fileSize.textContent = formatFileSize(file.size);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'attachment-remove';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', () => {
+      pendingAttachments[col].splice(index, 1);
+      renderAttachmentList(col, container);
+    });
+
+    fileItem.appendChild(fileName);
+    fileItem.appendChild(fileSize);
+    fileItem.appendChild(removeBtn);
+    container.appendChild(fileItem);
+  });
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' o';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+}
+
+async function uploadAttachments(col) {
+  const files = pendingAttachments[col] || [];
+  if (files.length === 0) return null;
+
+  const attachmentIds = [];
+
+  try {
+    const tokenInfo = await grist.docApi.getAccessToken({ readOnly: false });
+
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append('upload', file, file.name);
+
+      const response = await fetch(`${tokenInfo.baseUrl}/attachments?auth=${tokenInfo.token}`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload échoué: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      attachmentIds.push(result[0]);
+    }
+
+    return ['L', ...attachmentIds];
+  } catch (error) {
+    throw error;
+  }
+}
 
 
 grist.ready({
@@ -63,7 +136,6 @@ async function getAllColumnsFromMetadata() {
     return cols;
   } catch (error) {
     // Fallback si permissions bloquent l'accès aux tables système
-    console.warn('⚠️ Fallback fetchSelectedTable pour colonnes:', error.message);
     const tableData = await grist.fetchSelectedTable();
     return Object.keys(tableData).filter(colId =>
       colId !== 'id' &&
@@ -74,21 +146,14 @@ async function getAllColumnsFromMetadata() {
 }
 
 async function loadConfiguration() {
-  console.group('⚙️ loadConfiguration');
-
-  console.log('columns:', columns);
   if (!columns || columns.length === 0) {
-    console.warn('⛔ Abort: columns vides');
-    console.groupEnd();
     return;
   }
 
   let options = await grist.getOptions();
-  console.log('📦 options brutes:', options);
 
   // 🔑 première install = options === null
   if (options === null) {
-    console.warn('🆕 Première install détectée');
     options = {};
   }
 
@@ -96,16 +161,14 @@ async function loadConfiguration() {
     options.initialized !== true &&
     options.formElements === undefined;
 
-  console.log('isFirstInstall:', isFirstInstall);
 
   // 🔥 AUTO-INIT UNIQUEMENT SI PREMIÈRE INSTALL
   if (isFirstInstall) {
-    console.warn('🔥 Initialisation automatique des colonnes');
 
-    // Filtrer les colonnes formule et pièces jointes
+    // Filtrer les colonnes formule
     const editableColumns = columns.filter(col => {
       const meta = columnMetadata[col];
-      return !meta?.isFormula && !meta?.isAttachment;
+      return !meta?.isFormula;
     });
 
     formElements = editableColumns.map(col => ({
@@ -137,14 +200,9 @@ async function loadConfiguration() {
   // Appliquer les styles au form
   applyGlobalStyles();
 
-  console.log('formElements FINAL:', formElements);
-
-  // ⚠️ RENDER TOUJOURS
   renderConfigList();
   renderForm();
   updateColumnSelect();
-
-  console.groupEnd();
 }
 
 async function saveConfiguration() {
@@ -179,7 +237,7 @@ function updateColumnSelect() {
   const availableColumns = columns.filter(col => {
     if (usedColumns.includes(col)) return false;
     const meta = columnMetadata[col];
-    if (meta?.isFormula || meta?.isAttachment) return false;
+    if (meta?.isFormula) return false;
     return true;
   });
 
@@ -512,7 +570,10 @@ function showFilterPopup(element, index) {
       <select id="conditionalField">${fieldsOptions}</select>
     </div>
     <div class="filter-row">
-      <label>est égal à</label>
+      <select id="conditionalOperator">
+        <option value="equals">est égal à</option>
+        <option value="notEquals">n'est pas égal à</option>
+      </select>
     </div>
     <div class="filter-row">
       <select id="conditionalValue">
@@ -533,11 +594,13 @@ function showFilterPopup(element, index) {
   document.body.appendChild(popup);
 
   const conditionalFieldSelect = popup.querySelector('#conditionalField');
+  const conditionalOperatorSelect = popup.querySelector('#conditionalOperator');
   const conditionalValueSelect = popup.querySelector('#conditionalValue');
 
   // Pré-remplir si déjà configuré
   if (element.conditional) {
     conditionalFieldSelect.value = element.conditional.field;
+    conditionalOperatorSelect.value = element.conditional.operator || 'equals';
     updateConditionalValues(element.conditional.field, conditionalValueSelect);
     setTimeout(() => {
       conditionalValueSelect.value = element.conditional.value;
@@ -566,10 +629,11 @@ function showFilterPopup(element, index) {
 
   popup.querySelector('.save').addEventListener('click', () => {
     const field = conditionalFieldSelect.value;
+    const operator = conditionalOperatorSelect.value;
     const value = conditionalValueSelect.value;
 
     if (field && value) {
-      element.conditional = { field, value };
+      element.conditional = { field, operator, value };
     } else {
       element.conditional = null;
     }
@@ -665,7 +729,7 @@ function renderConfigList() {
     if (element.type === 'field') {
       const meta = columnMetadata[element.fieldName] || {};
       // Champ texte ou numérique (pour validation max caractères)
-      const isTextOrNumericField = !meta.isBool && !meta.isDate && !meta.isMultiple &&
+      const isTextOrNumericField = !meta.isBool && !meta.isDate && !meta.isMultiple && !meta.isAttachment &&
         (!meta.choices || meta.choices.length === 0) &&
         (!meta.isRef || meta.refChoices.length === 0);
       // Champ texte pur (pour multiligne)
@@ -1038,13 +1102,85 @@ async function getColumnMetadata() {
 
     return metadata;
   } catch (error) {
-    console.error('❌ Erreur récupération metadata:', error.message);
     return {};
   }
 }
 
 function createInputForColumn(col, meta, element = {}) {
   let inp;
+
+  if (meta.isAttachment) {
+    // Initialiser le stockage des PJ pour cette colonne
+    pendingAttachments[col] = [];
+
+    const container = document.createElement('div');
+    container.className = 'attachment-input';
+    container.id = `input_${col}`;
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.multiple = true;
+    fileInput.style.display = 'none';
+    fileInput.id = `file_${col}`;
+
+    const uploadBtn = document.createElement('button');
+    uploadBtn.type = 'button';
+    uploadBtn.className = 'attachment-btn';
+    uploadBtn.textContent = 'Charger une PJ';
+
+    const fileList = document.createElement('div');
+    fileList.className = 'attachment-list';
+    fileList.id = `files_${col}`;
+
+    uploadBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', () => {
+      const files = Array.from(fileInput.files);
+      const maxSize = 10 * 1024 * 1024; // 10 Mo
+      const maxFiles = 3;
+
+      files.forEach(file => {
+        // Vérifier la limite de 3 fichiers
+        if (pendingAttachments[col].length >= maxFiles) {
+          const errorDiv = document.getElementById(`error_${col}`);
+          if (errorDiv) {
+            errorDiv.textContent = `Maximum ${maxFiles} pièces jointes par champ`;
+            errorDiv.classList.add('show');
+            setTimeout(() => errorDiv.classList.remove('show'), 3000);
+          }
+          return;
+        }
+
+        if (file.size > maxSize) {
+          // Afficher erreur pour fichier trop gros
+          const errorDiv = document.getElementById(`error_${col}`);
+          if (errorDiv) {
+            errorDiv.textContent = `Le fichier "${file.name}" dépasse 10 Mo`;
+            errorDiv.classList.add('show');
+            setTimeout(() => errorDiv.classList.remove('show'), 3000);
+          }
+          return;
+        }
+
+        // Vérifier si le fichier n'est pas déjà ajouté
+        if (pendingAttachments[col].some(f => f.name === file.name && f.size === file.size)) {
+          return;
+        }
+
+        pendingAttachments[col].push(file);
+        renderAttachmentList(col, fileList);
+      });
+
+      // Réinitialiser l'input pour permettre de re-sélectionner le même fichier
+      fileInput.value = '';
+    });
+
+    container.appendChild(fileInput);
+    container.appendChild(uploadBtn);
+    container.appendChild(fileList);
+
+    return container;
+  }
 
   if (meta.isBool) {
     inp = document.createElement('input');
@@ -1125,11 +1261,22 @@ function createInputForColumn(col, meta, element = {}) {
   return inp;
 }
 
+function sanitizeText(value) {
+  if (typeof value !== 'string') return value;
+  return value
+    .trim()
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Supprime caractères de contrôle
+    .substring(0, 50000); // Limite raisonnable
+}
+
 function getInputValue(col, meta) {
   const inp = document.getElementById(`input_${col}`);
   if (!inp) return null;
 
   if (meta.isBool) return inp.checked;
+
+  // Les PJ sont gérées séparément via uploadAttachments
+  if (meta.isAttachment) return null;
 
   if (meta.isMultiple) {
     const selected = Array.from(inp.selectedOptions).map(opt => opt.value);
@@ -1138,9 +1285,13 @@ function getInputValue(col, meta) {
   }
 
   if (meta.isRef) return inp.value ? parseInt(inp.value) : null;
-  if (meta.isNumeric || meta.isInt) return inp.value ? parseFloat(inp.value) : null;
+  // Permettre la virgule comme séparateur décimal
+  if (meta.isNumeric || meta.isInt) {
+    const val = sanitizeText(inp.value);
+    return val ? parseFloat(val.replace(',', '.')) : null;
+  }
 
-  return inp.value;
+  return sanitizeText(inp.value);
 }
 
 function validateField(col, meta, element) {
@@ -1153,7 +1304,25 @@ function validateField(col, meta, element) {
   // Vérifier si le champ est requis
   if (element.required) {
     if (meta.isBool) {
-      // Les checkboxes sont toujours valides (checked ou non)
+      // Si le champ booléen est obligatoire, il doit être coché
+      if (!inp.checked) {
+        inp.classList.add('error');
+        if (err) {
+          err.textContent = 'Ce champ doit être coché';
+          err.classList.add('show');
+        }
+        return false;
+      }
+    } else if (meta.isAttachment) {
+      // Vérifier qu'au moins une PJ est sélectionnée
+      if (!pendingAttachments[col] || pendingAttachments[col].length === 0) {
+        inp.classList.add('error');
+        if (err) {
+          err.textContent = 'Au moins une pièce jointe est requise';
+          err.classList.add('show');
+        }
+        return false;
+      }
     } else if (meta.isMultiple) {
       if (inp.selectedOptions.length === 0) {
         inp.classList.add('error');
@@ -1181,7 +1350,9 @@ function validateField(col, meta, element) {
     const val = inp.value.trim();
     if (val === '') return true;
 
-    const num = parseFloat(val);
+    // Permettre la virgule comme séparateur décimal
+    const normalizedVal = val.replace(',', '.');
+    const num = parseFloat(normalizedVal);
     if (isNaN(num)) {
       inp.classList.add('error');
       if (err) {
@@ -1222,6 +1393,7 @@ function shouldShowField(element) {
 
   const conditionalField = element.conditional.field;
   const conditionalValue = element.conditional.value;
+  const conditionalOperator = element.conditional.operator || 'equals';
 
   const inp = document.getElementById(`input_${conditionalField}`);
   if (!inp) return true;
@@ -1240,6 +1412,9 @@ function shouldShowField(element) {
   // Comparer avec la valeur conditionnelle
   const expectedValue = meta.isRef ? parseInt(conditionalValue) : conditionalValue;
 
+  if (conditionalOperator === 'notEquals') {
+    return currentValue != expectedValue;
+  }
   return currentValue == expectedValue;
 }
 
@@ -1288,8 +1463,14 @@ function renderForm() {
       });
 
       if (meta.isBool) {
-        fieldDiv.appendChild(label);
+        // Checkbox en premier, puis le label
         fieldDiv.appendChild(inp);
+        fieldDiv.appendChild(label);
+        // Ajouter un élément d'erreur pour les champs booléens obligatoires
+        const err = document.createElement('div');
+        err.className = 'error-message';
+        err.id = `error_${col}`;
+        fieldDiv.appendChild(err);
       } else {
         fieldDiv.appendChild(label);
         fieldDiv.appendChild(inp);
@@ -1319,12 +1500,7 @@ function updateConditionalFields() {
   });
 }
 
-console.log('🧪 Champs rendus:',
-  Array.from(document.querySelectorAll('.field')).map(f => f.id)
-);
-
 grist.onRecords(() => {
-  console.log('🔄 Records updated');
   renderForm();
 });
 
@@ -1363,14 +1539,29 @@ addButton.addEventListener('click', async () => {
       const col = element.fieldName;
       const meta = columnMetadata[col] || {};
 
-      // Ne collecter que les champs visibles
-      if (shouldShowField(element)) {
+      // Ne collecter que les champs visibles (sauf PJ, gérées après)
+      if (shouldShowField(element) && !meta.isAttachment) {
         fields[col] = getInputValue(col, meta);
       }
     }
   });
 
   try {
+    // Uploader les PJ d'abord
+    for (const element of formElements) {
+      if (element.type === 'field') {
+        const col = element.fieldName;
+        const meta = columnMetadata[col] || {};
+
+        if (meta.isAttachment && shouldShowField(element)) {
+          const attachmentValue = await uploadAttachments(col);
+          if (attachmentValue) {
+            fields[col] = attachmentValue;
+          }
+        }
+      }
+    }
+
     await grist.selectedTable.create({ fields });
 
     // Afficher le message de succès
@@ -1388,6 +1579,10 @@ addButton.addEventListener('click', async () => {
 
         if (meta.isBool) {
           inp.checked = false;
+        } else if (meta.isAttachment) {
+          pendingAttachments[col] = [];
+          const fileList = document.getElementById(`files_${col}`);
+          if (fileList) fileList.innerHTML = '';
         } else if (meta.isMultiple) {
           Array.from(inp.options).forEach(opt => opt.selected = false);
         } else {
@@ -1399,7 +1594,7 @@ addButton.addEventListener('click', async () => {
     // Mettre à jour l'affichage conditionnel après réinitialisation
     updateConditionalFields();
   } catch (error) {
-    console.error("Erreur:", error);
-    alert("Erreur: " + error.message);
+    formError.textContent = "Erreur: " + error.message;
+    formError.classList.add('show');
   }
 });
