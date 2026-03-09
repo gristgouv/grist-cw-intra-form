@@ -1,3 +1,12 @@
+// =============================================================================
+// GRIST CUSTOM FORM WIDGET
+// A configurable form widget for Grist that supports drag-drop ordering,
+// conditional fields, attachments, rich text editing, and field validation.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// DOM REFERENCES
+// -----------------------------------------------------------------------------
 const fieldsContainer = document.getElementById('fields');
 const addButton = document.getElementById('addBtn');
 const configModal = document.getElementById('configModal');
@@ -14,15 +23,22 @@ const fontSelect = document.getElementById('fontSelect');
 const paddingSelect = document.getElementById('paddingSelect');
 const formContainer = document.querySelector('.container');
 
-let columns = [];
-let columnMetadata = {};
-let formElements = [];
-let draggedElement = null;
-let initInProgress = false;
-let globalFont = '';
-let globalPadding = '';
-let pendingAttachments = {}; // Stockage temporaire des PJ par colonne
+// -----------------------------------------------------------------------------
+// STATE
+// -----------------------------------------------------------------------------
+let columns = [];              // List of column IDs from current table
+let columnMetadata = {};       // Metadata for each column (type, choices, etc.)
+let formElements = [];         // Form configuration (fields, separators, text)
+let draggedElement = null;     // Currently dragged element in config modal
+let globalFont = '';           // Selected font family
+let globalPadding = '';        // Selected padding size
+let pendingAttachments = {};   // Temporary storage for file uploads per column
 
+// -----------------------------------------------------------------------------
+// ATTACHMENT HANDLING
+// -----------------------------------------------------------------------------
+
+// Render the list of pending attachments for a column
 function renderAttachmentList(col, container) {
   container.innerHTML = '';
 
@@ -54,118 +70,199 @@ function renderAttachmentList(col, container) {
   });
 }
 
+// Format file size in human-readable format (bytes, Ko, Mo)
 function formatFileSize(bytes) {
   if (bytes < 1024) return bytes + ' o';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
   return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
 }
 
+// Upload pending attachments to Grist and return attachment IDs in list format
 async function uploadAttachments(col) {
   const files = pendingAttachments[col] || [];
   if (files.length === 0) return null;
 
   const attachmentIds = [];
+  const tokenInfo = await grist.docApi.getAccessToken({ readOnly: false });
 
-  try {
-    const tokenInfo = await grist.docApi.getAccessToken({ readOnly: false });
+  for (const file of files) {
+    const formData = new FormData();
+    formData.append('upload', file, file.name);
 
-    for (const file of files) {
-      const formData = new FormData();
-      formData.append('upload', file, file.name);
+    const response = await fetch(`${tokenInfo.baseUrl}/attachments?auth=${tokenInfo.token}`, {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
 
-      const response = await fetch(`${tokenInfo.baseUrl}/attachments?auth=${tokenInfo.token}`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Upload échoué: ${response.status} ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      attachmentIds.push(result[0]);
+    if (!response.ok) {
+      throw new Error(`Le téléchargement a échoué : ${response.status} ${response.statusText}`);
     }
 
-    return ['L', ...attachmentIds];
-  } catch (error) {
-    throw error;
+    const result = await response.json();
+    attachmentIds.push(result[0]);
   }
+
+  // Return in Grist list format: ['L', id1, id2, ...]
+  return ['L', ...attachmentIds];
 }
+
+// -----------------------------------------------------------------------------
+// GRIST INITIALIZATION
+// -----------------------------------------------------------------------------
 
 
 grist.ready({
   requiredAccess: 'full',
+  // Callback when user clicks gear icon > "Open configuration" in widget menu
   onEditOptions: () => configModal.classList.add('show')
 });
 
+// Fetch table structure then load saved config
 (async () => {
-  columns = await getAllColumnsFromMetadata();
   columnMetadata = await getColumnMetadata();
+  columns = Object.keys(columnMetadata);
   await loadConfiguration();
 })();
 
+// -----------------------------------------------------------------------------
+// COLUMN & METADATA FETCHING
+// -----------------------------------------------------------------------------
 
-async function getAllColumnsFromMetadata() {
+// Fetch detailed metadata for all columns (type, choices, refs, etc.)
+// Returns: { colId: { type, choices, isRef, refChoices, isBool, ... }, ... }
+async function getColumnMetadata() {
   try {
-    // Méthode standard via tables système
+    // Get current table name (eg "Table1")
     const table = await grist.getTable();
-    const tableName = await table._platform.getTableId();
+    const currentTableId = await table._platform.getTableId();
 
-    const tables = await grist.docApi.fetchTable('_grist_Tables');
-    const columnsTable = await grist.docApi.fetchTable('_grist_Tables_column');
+    // _grist_Tables_column: list of all columns across all tables
+    // eg   {
+    //     id: [1, 2, 3, 4, 5, 6, 7],
+    //     colId: ['Nom', 'Email', 'Date', 'Montant', 'Titre', 'Prix', 'Stock'],
+    //     parentId: [1, 1, 2, 2, 3, 3, 3]
+    //   }
+    const colsInfo = await grist.docApi.fetchTable('_grist_Tables_column');
 
-    const tableRef = tables.id[tables.tableId.indexOf(tableName)];
-    const cols = [];
+    // _grist_Tables: list of all tables in the document
+    // eg   {
+    //     id: [1, 2, 3],  // numeric ref
+    //     tableId: ['Clients', 'Commandes', 'Produits']
+    //   }
+    const tablesInfo = await grist.docApi.fetchTable('_grist_Tables');
 
-    for (let i = 0; i < columnsTable.parentId.length; i++) {
-      if (columnsTable.parentId[i] === tableRef) {
-        const colId = columnsTable.colId[i];
-        if (
-          colId !== 'id' &&
-          colId !== 'manualSort' &&
-          !colId.startsWith('gristHelper')
-        ) {
-          cols.push(colId);
-        }
-      }
+    const metadata = {};
+
+    // Convert tableId to numeric ref (eg "Clients" → 1)
+    const currentTableNumericId = tablesInfo.id[tablesInfo.tableId.indexOf(currentTableId)];
+
+    // Used for visibleCol: numeric column ID -> column info
+    // Example: visibleCol=5 means "display column with id=5" for Ref fields
+    const colById = {};
+    for (let i = 0; i < colsInfo.id.length; i++) {
+      colById[colsInfo.id[i]] = {
+        colId: colsInfo.colId[i],
+        parentId: colsInfo.parentId[i]
+      };
     }
 
-    return cols;
+    // -----------------------------------------------------------------------------
+    // LOOP THROUGH COLUMNS BELONGING TO CURRENT TABLE
+    // -----------------------------------------------------------------------------
+    for (let i = 0; i < colsInfo.colId.length; i++) {
+      if (colsInfo.parentId[i] !== currentTableNumericId) continue;
+
+      const colId = colsInfo.colId[i];
+
+      // Exclude system columns (id, manualSort, gristHelper_*)
+      if (colId === 'id' || colId === 'manualSort' || colId.startsWith('gristHelper')) continue;
+
+      const type = colsInfo.type[i];  // eg: "Text", "Int", "Ref:Clients", "ChoiceList"
+      let choices = null;
+      let refTable = null;
+      let refChoices = [];
+
+      // For Choice/ChoiceList columns: extract choices from widgetOptions JSON
+      // Example: {"choices": ["Option A", "Option B", "Option C"]}
+      if (colsInfo.widgetOptions?.[i]) {
+        try {
+          const options = JSON.parse(colsInfo.widgetOptions[i]);
+          if (options.choices) choices = options.choices;
+        } catch (e) { }
+      }
+
+      // For Ref/RefList columns: extract target table name from type
+      // "Ref:Clients" -> refTable = "Clients"
+      // "RefList:Products" -> refTable = "Products"
+      if (type.startsWith('Ref:')) {
+        refTable = type.substring(4);
+      } else if (type.startsWith('RefList:')) {
+        refTable = type.substring(8);
+      }
+
+      // For Ref/RefList: fetch target table and build dropdown choices
+      if (refTable) {
+        try {
+          const refData = await grist.docApi.fetchTable(refTable);
+
+          // visibleCol: for Reference columns: numeric ID of the display column
+          let displayColId = null;
+          const visibleColRef = colsInfo.visibleCol?.[i];
+
+          // Resolve numeric ID -> column name using our index
+          if (visibleColRef && visibleColRef !== 0 && colById[visibleColRef]) {
+            displayColId = colById[visibleColRef].colId;
+          }
+
+          // Fallback: use first non-system column if visibleCol not set
+          if (!displayColId || !refData[displayColId]) {
+            displayColId = Object.keys(refData).find(k => k !== 'id' && k !== 'manualSort');
+          }
+
+          // Build choices array: [{id: 1, label: "Client A"}, {id: 2, label: "Client B"}]
+          refChoices = refData.id.map((id, idx) => ({
+            id: id,
+            label: displayColId && refData[displayColId] ? refData[displayColId][idx] : id
+          }));
+        } catch (e) { }
+      }
+
+      // Store all metadata for this column
+      metadata[colId] = {
+        type,
+        choices,                    // For Choice/ChoiceList: ["A", "B", "C"]
+        label: colsInfo.label?.[i] || colId,
+        isMultiple: type === 'ChoiceList' || type.startsWith('RefList:'),
+        isRef: type.startsWith('Ref:') || type.startsWith('RefList:'),
+        refTable,                   // Target table name for Ref/RefList
+        refChoices,                 // [{id, label}] for Ref/RefList dropdowns
+        isBool: type === 'Bool',
+        isDate: type === 'Date' || type === 'DateTime',
+        isNumeric: type === 'Numeric',
+        isInt: type === 'Int',
+        isFormula: colsInfo.isFormula?.[i] === true && colsInfo.formula?.[i]?.length > 0,
+        isAttachment: type === 'Attachments'
+      };
+    }
+
+    return metadata;
   } catch (error) {
-    // Fallback si permissions bloquent l'accès aux tables système
-    const tableData = await grist.fetchSelectedTable();
-    return Object.keys(tableData).filter(colId =>
-      colId !== 'id' &&
-      colId !== 'manualSort' &&
-      !colId.startsWith('gristHelper')
-    );
+    return {};
   }
 }
 
+// -----------------------------------------------------------------------------
+// CONFIGURATION PERSISTENCE
+// -----------------------------------------------------------------------------
+
+// Load form configuration from Grist widget options
 async function loadConfiguration() {
-  if (!columns || columns.length === 0) {
-    return;
-  }
+  const options = await grist.getOptions() || {};
+  const isFirstInstall = !options.initialized && !options.formElements;
 
-  let options = await grist.getOptions();
-
-  // 🔑 première install = options === null
-  if (options === null) {
-    options = {};
-  }
-
-  const isFirstInstall =
-    options.initialized !== true &&
-    options.formElements === undefined;
-
-
-  // 🔥 AUTO-INIT UNIQUEMENT SI PREMIÈRE INSTALL
   if (isFirstInstall) {
-
-    // Filtrer les colonnes formule
+    // Auto-initialize with all editable (non-formula) columns
     const editableColumns = columns.filter(col => {
       const meta = columnMetadata[col];
       return !meta?.isFormula;
@@ -185,26 +282,25 @@ async function loadConfiguration() {
       formElements
     });
   } else {
-    // ✅ CHARGER LA CONFIG EXISTANTE
+    // Load existing configuration
     formElements = options.formElements || [];
   }
 
-  // Charger les paramètres globaux
+  // Load global style settings
   globalFont = options.globalFont || '';
   globalPadding = options.globalPadding || '';
 
-  // Restaurer les sélecteurs
+  // Restore UI state
   if (fontSelect) fontSelect.value = globalFont;
   if (paddingSelect) paddingSelect.value = globalPadding;
 
-  // Appliquer les styles au form
   applyGlobalStyles();
-
   renderConfigList();
   renderForm();
   updateColumnSelect();
 }
 
+// Save form configuration to Grist widget options
 async function saveConfiguration() {
   await grist.setOptions({
     initialized: true,
@@ -214,6 +310,7 @@ async function saveConfiguration() {
   });
 }
 
+// Apply global font and padding styles to form container
 function applyGlobalStyles() {
   if (formContainer) {
     formContainer.style.fontFamily = globalFont || '';
@@ -228,12 +325,19 @@ function applyGlobalStyles() {
   }
 }
 
+// -----------------------------------------------------------------------------
+// COLUMN SELECT (for adding new fields)
+// -----------------------------------------------------------------------------
 
+// Update column dropdown to show only unused, non-formula columns
+// Called when opening the config modal or after adding/removing a field
 function updateColumnSelect() {
+  // Get list of columns already used in the form
   const usedColumns = formElements
     .filter(el => el.type === 'field')
     .map(el => el.fieldName);
 
+  // Filter out used columns and formula columns (which can't be edited)
   const availableColumns = columns.filter(col => {
     if (usedColumns.includes(col)) return false;
     const meta = columnMetadata[col];
@@ -264,6 +368,31 @@ function updateColumnSelect() {
   });
 }
 
+// -----------------------------------------------------------------------------
+// RICH TEXT EDITOR POPUP
+// -----------------------------------------------------------------------------
+
+// Available emojis for rich text editor
+const emojis = [
+  '😀', '😃', '😄', '😁', '😊', '😍', '🥰', '😘',
+  '😂', '🤣', '😉', '😎', '🤔', '😐', '😑', '😶',
+  '🤝', '👍', '👎', '👏', '🙏', '💪', '✊', '👊',
+  '❤️', '💙', '💚', '💛', '🧡', '💜', '🖤', '💔',
+  '📊', '📈', '📉', '💼', '🏢', '⚙️', '🔧', '🛠️',
+  '✅', '❌', '⚠️', '⛔', '🚫', '💡', '🔔', '📢',
+  '🎯', '🎓', '🏆', '🥇', '⭐', '✨', '🔍', '📝'
+];
+
+// Available colors for text and background
+const colors = [
+  '#000000', '#374151', '#6B7280', '#9CA3AF',
+  '#DC2626', '#EF4444', '#EA580C', '#F97316',
+  '#F59E0B', '#FBBF24', '#84CC16', '#10B981',
+  '#14B8A6', '#06B6D4', '#0EA5E9', '#3B82F6',
+  '#6366F1', '#8B5CF6', '#A855F7', '#EC4899'
+];
+
+// Show rich text editor popup for editing field labels or text content
 function showEditPopup(element, index, propertyName = 'content') {
   const overlay = document.getElementById('popupOverlay');
   overlay.classList.add('show');
@@ -314,7 +443,6 @@ function showEditPopup(element, index, propertyName = 'content') {
   const editor = popup.querySelector('#editContent');
   editor.focus();
 
-  // Initialiser les fonctionnalités de l'éditeur
   initRichEditor(popup, editor);
 
   popup.querySelector('.cancel').addEventListener('click', () => {
@@ -340,28 +468,9 @@ function showEditPopup(element, index, propertyName = 'content') {
   });
 }
 
-// Emojis disponibles
-const emojis = [
-  '😀', '😃', '😄', '😁', '😊', '😍', '🥰', '😘',
-  '😂', '🤣', '😉', '😎', '🤔', '😐', '😑', '😶',
-  '🤝', '👍', '👎', '👏', '🙏', '💪', '✊', '👊',
-  '❤️', '💙', '💚', '💛', '🧡', '💜', '🖤', '💔',
-  '📊', '📈', '📉', '💼', '🏢', '⚙️', '🔧', '🛠️',
-  '✅', '❌', '⚠️', '⛔', '🚫', '💡', '🔔', '📢',
-  '🎯', '🎓', '🏆', '🥇', '⭐', '✨', '🔍', '📝'
-];
-
-// Couleurs prédéfinies
-const colors = [
-  '#000000', '#374151', '#6B7280', '#9CA3AF',
-  '#DC2626', '#EF4444', '#EA580C', '#F97316',
-  '#F59E0B', '#FBBF24', '#84CC16', '#10B981',
-  '#14B8A6', '#06B6D4', '#0EA5E9', '#3B82F6',
-  '#6366F1', '#8B5CF6', '#A855F7', '#EC4899'
-];
-
+// Initialize rich text editor toolbar functionality
 function initRichEditor(popup, editor) {
-  // Boutons de formatage
+  // Format buttons (bold, italic, underline, list)
   popup.querySelectorAll('.toolbar-btn[data-cmd]').forEach(btn => {
     btn.addEventListener('click', () => {
       document.execCommand(btn.dataset.cmd, false, null);
@@ -369,7 +478,7 @@ function initRichEditor(popup, editor) {
     });
   });
 
-  // Sélecteur de style
+  // Block format selector (h1, h2, h3, p)
   const formatSelect = popup.querySelector('#formatSelect');
   formatSelect.addEventListener('change', () => {
     if (formatSelect.value) {
@@ -379,10 +488,11 @@ function initRichEditor(popup, editor) {
     }
   });
 
-  // Bouton lien
+  // Link insertion
   popup.querySelector('#linkBtn').addEventListener('click', () => {
     const url = prompt('URL du lien:');
     if (url) {
+      // If text was selected before clicking the link icon
       const selection = window.getSelection();
       const text = selection.toString() || url;
       const normalizedUrl = url.match(/^https?:\/\//) ? url : 'https://' + url;
@@ -409,7 +519,7 @@ function initRichEditor(popup, editor) {
     });
   });
 
-  // Color picker
+  // Text color picker
   const colorBtn = popup.querySelector('#colorBtn');
   const colorPicker = popup.querySelector('#colorPicker');
   colorPicker.innerHTML = colors.map(c => `<button type="button" class="color-btn" style="background:${c}" data-color="${c}"></button>`).join('');
@@ -428,7 +538,7 @@ function initRichEditor(popup, editor) {
     });
   });
 
-  // Background color picker
+  // Background color picker (20% opacity)
   const bgColorBtn = popup.querySelector('#bgColorBtn');
   const bgColorPicker = popup.querySelector('#bgColorPicker');
   bgColorPicker.innerHTML = colors.map(c => {
@@ -452,7 +562,7 @@ function initRichEditor(popup, editor) {
     });
   });
 
-  // Fermer les pickers en cliquant ailleurs
+  // Close pickers when clicking elsewhere
   popup.addEventListener('click', (e) => {
     if (!e.target.closest('.color-picker-wrapper') && !e.target.closest('#emojiBtn')) {
       colorPicker.classList.remove('show');
@@ -461,7 +571,7 @@ function initRichEditor(popup, editor) {
     }
   });
 
-  // Raccourcis clavier
+  // Keyboard shortcuts
   editor.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey) {
       switch (e.key.toLowerCase()) {
@@ -482,6 +592,12 @@ function initRichEditor(popup, editor) {
   });
 }
 
+// -----------------------------------------------------------------------------
+// VALIDATION POPUP
+// -----------------------------------------------------------------------------
+
+// Show popup to configure max length validation for a field
+// Allows user to set a character limit that will be enforced on form submission
 function showValidationPopup(element, index) {
   const overlay = document.getElementById('popupOverlay');
   overlay.classList.add('show');
@@ -489,6 +605,7 @@ function showValidationPopup(element, index) {
   const popup = document.createElement('div');
   popup.className = 'validation-popup';
 
+  // Check if this field already has a maxLength validation configured
   const hasValidation = element.maxLength !== null && element.maxLength !== undefined;
 
   popup.innerHTML = `
@@ -513,8 +630,10 @@ function showValidationPopup(element, index) {
     overlay.classList.remove('show');
   });
 
+  // Delete button only exists if a validation was already configured
   if (hasValidation) {
     popup.querySelector('.delete').addEventListener('click', () => {
+      // Remove the maxLength validation from this field
       element.maxLength = null;
       saveConfiguration();
       renderConfigList();
@@ -523,8 +642,10 @@ function showValidationPopup(element, index) {
     });
   }
 
+  // Save the validation configuration
   popup.querySelector('.save').addEventListener('click', () => {
     const maxLength = document.getElementById('maxLengthInput').value;
+    // Convert to integer or null if empty
     element.maxLength = maxLength ? parseInt(maxLength) : null;
     saveConfiguration();
     renderConfigList();
@@ -538,11 +659,16 @@ function showValidationPopup(element, index) {
   });
 }
 
+// -----------------------------------------------------------------------------
+// CONDITIONAL DISPLAY POPUP
+// -----------------------------------------------------------------------------
+
+// Show popup to configure conditional display rules for a field
 function showFilterPopup(element, index) {
   const overlay = document.getElementById('popupOverlay');
   overlay.classList.add('show');
 
-  // Récupérer les champs qui sont des listes simples (Choice ou Ref)
+  // Get fields that can be used as conditions (single Choice or Ref)
   const conditionalFields = formElements.filter(el => {
     if (el.type !== 'field') return false;
     const meta = columnMetadata[el.fieldName];
@@ -551,6 +677,7 @@ function showFilterPopup(element, index) {
       (meta.isRef && !meta.isMultiple && meta.refChoices.length > 0);
   });
 
+  // Check if this field already has a conditional rule configured
   const hasConditional = element.conditional !== null && element.conditional !== undefined;
 
   const popup = document.createElement('div');
@@ -597,7 +724,7 @@ function showFilterPopup(element, index) {
   const conditionalOperatorSelect = popup.querySelector('#conditionalOperator');
   const conditionalValueSelect = popup.querySelector('#conditionalValue');
 
-  // Pré-remplir si déjà configuré
+  // Pre-fill if already configured
   if (element.conditional) {
     conditionalFieldSelect.value = element.conditional.field;
     conditionalOperatorSelect.value = element.conditional.operator || 'equals';
@@ -607,6 +734,7 @@ function showFilterPopup(element, index) {
     }, 0);
   }
 
+  // When user selects a different field, update the available values
   conditionalFieldSelect.addEventListener('change', (e) => {
     updateConditionalValues(e.target.value, conditionalValueSelect);
   });
@@ -616,8 +744,10 @@ function showFilterPopup(element, index) {
     overlay.classList.remove('show');
   });
 
+  // Delete button only exists if a conditional rule was already configured
   if (hasConditional) {
     popup.querySelector('.delete').addEventListener('click', () => {
+      // Remove the conditional rule from this field
       element.conditional = null;
       saveConfiguration();
       renderConfigList();
@@ -627,11 +757,13 @@ function showFilterPopup(element, index) {
     });
   }
 
+  // Save the conditional rule configuration
   popup.querySelector('.save').addEventListener('click', () => {
     const field = conditionalFieldSelect.value;
     const operator = conditionalOperatorSelect.value;
     const value = conditionalValueSelect.value;
 
+    // Only save if both field and value are selected, otherwise clear the rule
     if (field && value) {
       element.conditional = { field, operator, value };
     } else {
@@ -651,7 +783,10 @@ function showFilterPopup(element, index) {
   });
 }
 
+// Populate value dropdown based on selected conditional field
+// Shows either reference choices (for Ref columns) or choice options (for Choice columns)
 function updateConditionalValues(fieldName, selectElement) {
+  // Reset to empty placeholder if no field selected
   if (!fieldName) {
     selectElement.innerHTML = '<option value="">-- Sélectionner une valeur --</option>';
     return;
@@ -660,8 +795,10 @@ function updateConditionalValues(fieldName, selectElement) {
   const meta = columnMetadata[fieldName];
   if (!meta) return;
 
+  // Reset dropdown before populating
   selectElement.innerHTML = '<option value="">-- Sélectionner une valeur --</option>';
 
+  // For Ref columns: use refChoices (id + label from referenced table)
   if (meta.refChoices && meta.refChoices.length > 0) {
     meta.refChoices.forEach(choice => {
       const opt = document.createElement('option');
@@ -669,6 +806,7 @@ function updateConditionalValues(fieldName, selectElement) {
       opt.textContent = choice.label;
       selectElement.appendChild(opt);
     });
+  // For Choice columns: use choices array directly
   } else if (meta.choices && meta.choices.length > 0) {
     meta.choices.forEach(choice => {
       const opt = document.createElement('option');
@@ -679,6 +817,11 @@ function updateConditionalValues(fieldName, selectElement) {
   }
 }
 
+// -----------------------------------------------------------------------------
+// FORM CONFIGURATION : LIST UI HELPERS
+// -----------------------------------------------------------------------------
+
+// Create an edit button with tooltip
 function createEditButton(tooltip, onClick) {
   const btn = document.createElement('div');
   btn.className = 'icon-btn';
@@ -687,12 +830,15 @@ function createEditButton(tooltip, onClick) {
   return btn;
 }
 
+// Create controls container
 function createControls() {
   const controls = document.createElement('div');
   controls.className = 'element-controls';
   return controls;
 }
 
+// Create delete button for form element
+// Removes the element from form config and refreshes all views
 function createDeleteButton(index) {
   const btn = document.createElement('button');
   btn.textContent = '🗑️';
@@ -701,11 +847,18 @@ function createDeleteButton(index) {
     saveConfiguration();
     renderConfigList();
     renderForm();
-    updateColumnSelect();
+    updateColumnSelect();  // Column becomes available again
   };
   return btn;
 }
 
+// -----------------------------------------------------------------------------
+// FORM CONFIGURATION : LIST & BLOCKS RENDERING
+// -----------------------------------------------------------------------------
+
+// Render the configuration list with drag-drop support
+// Displays all form elements in the config modal with their controls
+// (edit label, required toggle, validation, multiline, conditional display, delete)
 function renderConfigList() {
   allElementsContainer.innerHTML = '';
 
@@ -728,14 +881,14 @@ function renderConfigList() {
 
     if (element.type === 'field') {
       const meta = columnMetadata[element.fieldName] || {};
-      // Champ texte ou numérique (pour validation max caractères)
+
+      // Determine field capabilities for showing appropriate controls
       const isTextOrNumericField = !meta.isBool && !meta.isDate && !meta.isMultiple && !meta.isAttachment &&
         (!meta.choices || meta.choices.length === 0) &&
         (!meta.isRef || meta.refChoices.length === 0);
-      // Champ texte pur (pour multiligne)
       const isPureTextField = isTextOrNumericField && !meta.isNumeric && !meta.isInt;
 
-      // Label
+      // Label display
       const labelWrapper = document.createElement('div');
       labelWrapper.className = 'field-label-wrapper';
 
@@ -745,6 +898,7 @@ function renderConfigList() {
 
       labelWrapper.appendChild(labelSpan);
 
+      // Display column id
       preview.className = 'element-preview field';
       preview.textContent = `Id colonne : ${element.fieldName}`;
 
@@ -753,10 +907,10 @@ function renderConfigList() {
 
       const controls = createControls();
 
-      // Icône édition du libellé
+      // Edit label button
       controls.appendChild(createEditButton('Modifier le libellé', () => showEditPopup(element, index, 'fieldLabel')));
 
-      // Icône requis (*)
+      // Required toggle button
       const requiredBtn = document.createElement('div');
       requiredBtn.className = 'icon-btn' + (element.required ? ' active' : '');
       requiredBtn.innerHTML = `
@@ -771,7 +925,7 @@ function renderConfigList() {
       };
       controls.appendChild(requiredBtn);
 
-      // Icône validation (texte et numérique)
+      // Max length validation button (text and numeric fields only)
       if (isTextOrNumericField) {
         const validationBtn = document.createElement('div');
         validationBtn.className = 'icon-btn' + (element.maxLength ? ' active' : '');
@@ -785,7 +939,7 @@ function renderConfigList() {
         controls.appendChild(validationBtn);
       }
 
-      // Icône multiligne (texte pur uniquement)
+      // Multiline toggle button (pure text fields only)
       if (isPureTextField) {
         const multilineBtn = document.createElement('div');
         multilineBtn.className = 'icon-btn' + (element.multiline ? ' active' : '');
@@ -802,7 +956,7 @@ function renderConfigList() {
         controls.appendChild(multilineBtn);
       }
 
-      // Icône filtre
+      // Conditional display button
       const filterBtn = document.createElement('div');
       filterBtn.className = 'icon-btn' + (element.conditional ? ' active' : '');
       filterBtn.innerHTML = `
@@ -827,18 +981,8 @@ function renderConfigList() {
 
       div.appendChild(contentWrapper);
       div.appendChild(controls);
-    } else if (element.type === 'title') {
-      preview.className = 'element-preview title';
-      preview.innerHTML = element.content;
-      contentWrapper.appendChild(preview);
-
-      const controls = createControls();
-      controls.appendChild(createEditButton('Modifier', () => showEditPopup(element, index)));
-      controls.appendChild(createDeleteButton(index));
-
-      div.appendChild(contentWrapper);
-      div.appendChild(controls);
-    } else if (element.type === 'text') {
+    } else if (element.type === 'title' || element.type === 'text') {
+      // Both title and text are rendered the same way
       preview.className = 'element-preview text';
       preview.innerHTML = element.content;
       contentWrapper.appendChild(preview);
@@ -851,6 +995,7 @@ function renderConfigList() {
       div.appendChild(controls);
     }
 
+    // Drag and drop event handlers
     div.addEventListener('dragstart', function (e) {
       draggedElement = this;
       this.classList.add('dragging');
@@ -861,7 +1006,6 @@ function renderConfigList() {
       this.classList.remove('dragging');
       draggedElement = null;
 
-      // Nettoyer tous les indicateurs visuels
       document.querySelectorAll('.element-item').forEach(el => {
         el.classList.remove('drag-over-top', 'drag-over-bottom');
       });
@@ -872,12 +1016,11 @@ function renderConfigList() {
       e.dataTransfer.dropEffect = 'move';
 
       if (draggedElement && draggedElement !== this) {
-        // Nettoyer les classes précédentes
         document.querySelectorAll('.element-item').forEach(el => {
           el.classList.remove('drag-over-top', 'drag-over-bottom');
         });
 
-        // Calculer la position relative de la souris dans l'élément
+        // Show drop indicator based on mouse position
         const rect = this.getBoundingClientRect();
         const midpoint = rect.top + rect.height / 2;
 
@@ -892,7 +1035,6 @@ function renderConfigList() {
     });
 
     div.addEventListener('dragleave', function (e) {
-      // Vérifier si on quitte vraiment l'élément (et pas juste un enfant)
       if (e.target === this) {
         this.classList.remove('drag-over-top', 'drag-over-bottom');
       }
@@ -901,7 +1043,6 @@ function renderConfigList() {
     div.addEventListener('drop', function (e) {
       if (e.stopPropagation) e.stopPropagation();
 
-      // Nettoyer tous les indicateurs visuels
       document.querySelectorAll('.element-item').forEach(el => {
         el.classList.remove('drag-over-top', 'drag-over-bottom');
       });
@@ -910,20 +1051,17 @@ function renderConfigList() {
         const draggedIndex = parseInt(draggedElement.dataset.index);
         const targetIndex = parseInt(this.dataset.index);
 
-        // Calculer la position relative de la souris dans l'élément
         const rect = this.getBoundingClientRect();
         const midpoint = rect.top + rect.height / 2;
 
         let insertPosition;
         if (e.clientY < midpoint) {
-          // Insérer avant l'élément cible
           insertPosition = targetIndex;
         } else {
-          // Insérer après l'élément cible
           insertPosition = targetIndex + 1;
         }
 
-        // Ajuster la position si on déplace vers le bas
+        // Adjust for removal of dragged element
         if (draggedIndex < insertPosition) {
           insertPosition--;
         }
@@ -944,7 +1082,17 @@ function renderConfigList() {
   });
 }
 
+// -----------------------------------------------------------------------------
+// FORM CONFIGURATION : ADD NEW ELEMENT
+// -----------------------------------------------------------------------------
+
+// When user selects an element type in the "Add element" dropdown:
+// - "column" → show column picker dropdown
+// - "separator"
+// - "text" → show text input field
+
 elementType.addEventListener('change', () => {
+  // Hide all secondary inputs first
   columnSelect.style.display = 'none';
   elementContent.style.display = 'none';
 
@@ -952,13 +1100,14 @@ elementType.addEventListener('change', () => {
     updateColumnSelect();
     columnSelect.style.display = 'block';
   } else if (elementType.value === 'separator') {
-    // Rien
+    // Separator needs no extra input
   } else if (elementType.value) {
     elementContent.style.display = 'block';
     elementContent.placeholder = 'Texte';
   }
 });
 
+// When user clicks "Add" button: create the element and add it to form config
 addElementBtn.addEventListener('click', () => {
   const type = elementType.value;
   if (!type) return;
@@ -969,6 +1118,7 @@ addElementBtn.addEventListener('click', () => {
       alert('Veuillez sélectionner une colonne');
       return;
     }
+    // Add field element linked to this column
     formElements.push({
       type: 'field',
       fieldName: col,
@@ -978,8 +1128,10 @@ addElementBtn.addEventListener('click', () => {
       conditional: null
     });
   } else if (type === 'separator') {
+    // Add horizontal separator
     formElements.push({ type: 'separator', content: '' });
   } else {
+    // Add text block
     const content = elementContent.value.trim();
     if (!content) {
       alert('Veuillez saisir un contenu');
@@ -992,6 +1144,7 @@ addElementBtn.addEventListener('click', () => {
   renderConfigList();
   renderForm();
 
+  // Reset the "Add element" panel
   elementType.value = '';
   columnSelect.value = '';
   elementContent.value = '';
@@ -999,118 +1152,48 @@ addElementBtn.addEventListener('click', () => {
   elementContent.style.display = 'none';
 });
 
+// -----------------------------------------------------------------------------
+// FORM CONFIGURATION : MODAL CLOSE & STYLE SETTINGS
+// -----------------------------------------------------------------------------
+
+// Close modal when clicking X button or outside the modal
 closeModal.addEventListener('click', () => configModal.classList.remove('show'));
 configModal.addEventListener('click', (e) => {
   if (e.target === configModal) configModal.classList.remove('show');
 });
 
-// Event listeners pour les paramètres globaux
+// Font selection: apply to form and save
 fontSelect.addEventListener('change', () => {
   globalFont = fontSelect.value;
   applyGlobalStyles();
   saveConfiguration();
 });
 
+// Padding selection: apply to form and save
 paddingSelect.addEventListener('change', () => {
   globalPadding = paddingSelect.value;
   applyGlobalStyles();
   saveConfiguration();
 });
 
-async function getColumnMetadata() {
-  try {
-    const table = await grist.getTable();
-    const currentTableId = await table._platform.getTableId();
-    const docInfo = await grist.docApi.fetchTable('_grist_Tables_column');
-    const tablesInfo = await grist.docApi.fetchTable('_grist_Tables');
+// -----------------------------------------------------------------------------
+// FORM INPUT CREATION
+// -----------------------------------------------------------------------------
 
-    const metadata = {};
-
-    const currentTableNumericId = tablesInfo.id[tablesInfo.tableId.indexOf(currentTableId)];
-
-    // Construire un index des colonnes par leur id numérique pour résoudre visibleCol
-    const colById = {};
-    for (let i = 0; i < docInfo.id.length; i++) {
-      colById[docInfo.id[i]] = {
-        colId: docInfo.colId[i],
-        parentId: docInfo.parentId[i]
-      };
-    }
-
-    for (let i = 0; i < docInfo.colId.length; i++) {
-      if (docInfo.parentId[i] !== currentTableNumericId) continue;
-
-      const colId = docInfo.colId[i];
-      const type = docInfo.type[i];
-      let choices = null;
-      let refTable = null;
-      let refChoices = [];
-
-      if (docInfo.widgetOptions?.[i]) {
-        try {
-          const options = JSON.parse(docInfo.widgetOptions[i]);
-          if (options.choices) choices = options.choices;
-        } catch (e) { }
-      }
-
-      if (type.startsWith('Ref:')) {
-        refTable = type.substring(4);
-      } else if (type.startsWith('RefList:')) {
-        refTable = type.substring(8);
-      }
-
-      if (refTable) {
-        try {
-          const refData = await grist.docApi.fetchTable(refTable);
-
-          // Récupérer la colonne d'affichage (visibleCol) configurée dans Grist
-          let displayColId = null;
-          const visibleColRef = docInfo.visibleCol?.[i];
-
-          if (visibleColRef && visibleColRef !== 0 && colById[visibleColRef]) {
-            displayColId = colById[visibleColRef].colId;
-          }
-
-          // Fallback: première colonne non-système si pas de visibleCol
-          if (!displayColId || !refData[displayColId]) {
-            displayColId = Object.keys(refData).find(k => k !== 'id' && k !== 'manualSort');
-          }
-
-          refChoices = refData.id.map((id, idx) => ({
-            id: id,
-            label: displayColId && refData[displayColId] ? refData[displayColId][idx] : id
-          }));
-        } catch (e) { }
-      }
-
-      metadata[colId] = {
-        type,
-        choices,
-        label: docInfo.label?.[i] || colId,
-        isMultiple: type === 'ChoiceList' || type.startsWith('RefList:'),
-        isRef: type.startsWith('Ref:') || type.startsWith('RefList:'),
-        refTable,
-        refChoices,
-        isBool: type === 'Bool',
-        isDate: type === 'Date' || type === 'DateTime',
-        isNumeric: type === 'Numeric',
-        isInt: type === 'Int',
-        isFormula: docInfo.isFormula?.[i] === true && docInfo.formula?.[i]?.length > 0,
-        isAttachment: type === 'Attachments'
-      };
-    }
-
-    return metadata;
-  } catch (error) {
-    return {};
-  }
-}
-
+// Create appropriate input element based on column type
+// Returns different HTML elements depending on the column's Grist type:
+// - Attachments: file upload with drag-drop
+// - Bool: checkbox
+// - Date: date picker
+// - Numeric/Int: text input (allows comma as decimal separator)
+// - ChoiceList/RefList: multi-select dropdown
+// - Choice/Ref: single-select dropdown
+// - Text: input or textarea (if multiline enabled)
 function createInputForColumn(col, meta, element = {}) {
   let inp;
 
+  // Attachment columns: custom file upload UI
   if (meta.isAttachment) {
-    // Initialiser le stockage des PJ pour cette colonne
     pendingAttachments[col] = [];
 
     const container = document.createElement('div');
@@ -1136,11 +1219,10 @@ function createInputForColumn(col, meta, element = {}) {
 
     fileInput.addEventListener('change', () => {
       const files = Array.from(fileInput.files);
-      const maxSize = 10 * 1024 * 1024; // 10 Mo
+      const maxSize = 10 * 1024 * 1024; // 10 MB
       const maxFiles = 3;
 
       files.forEach(file => {
-        // Vérifier la limite de 3 fichiers
         if (pendingAttachments[col].length >= maxFiles) {
           const errorDiv = document.getElementById(`error_${col}`);
           if (errorDiv) {
@@ -1152,7 +1234,6 @@ function createInputForColumn(col, meta, element = {}) {
         }
 
         if (file.size > maxSize) {
-          // Afficher erreur pour fichier trop gros
           const errorDiv = document.getElementById(`error_${col}`);
           if (errorDiv) {
             errorDiv.textContent = `Le fichier "${file.name}" dépasse 10 Mo`;
@@ -1162,7 +1243,7 @@ function createInputForColumn(col, meta, element = {}) {
           return;
         }
 
-        // Vérifier si le fichier n'est pas déjà ajouté
+        // Prevent duplicates
         if (pendingAttachments[col].some(f => f.name === file.name && f.size === file.size)) {
           return;
         }
@@ -1171,7 +1252,7 @@ function createInputForColumn(col, meta, element = {}) {
         renderAttachmentList(col, fileList);
       });
 
-      // Réinitialiser l'input pour permettre de re-sélectionner le même fichier
+      // Reset to allow re-selecting same file
       fileInput.value = '';
     });
 
@@ -1182,6 +1263,7 @@ function createInputForColumn(col, meta, element = {}) {
     return container;
   }
 
+  // Boolean columns: simple checkbox
   if (meta.isBool) {
     inp = document.createElement('input');
     inp.type = 'checkbox';
@@ -1189,6 +1271,7 @@ function createInputForColumn(col, meta, element = {}) {
     return inp;
   }
 
+  // Date columns: native date picker
   if (meta.isDate) {
     inp = document.createElement('input');
     inp.type = 'date';
@@ -1196,6 +1279,7 @@ function createInputForColumn(col, meta, element = {}) {
     return inp;
   }
 
+  // Numeric columns: text input to allow comma as decimal separator (French format)
   if (meta.isNumeric || meta.isInt) {
     inp = document.createElement('input');
     inp.type = 'text';
@@ -1203,10 +1287,12 @@ function createInputForColumn(col, meta, element = {}) {
     return inp;
   }
 
+  // ChoiceList or RefList columns: multi-select dropdown
   if (meta.isMultiple) {
     const sel = document.createElement('select');
     sel.multiple = true;
     sel.id = `input_${col}`;
+    // Use refChoices for RefList, or map choices for ChoiceList
     const opts = meta.refChoices.length > 0 ? meta.refChoices : (meta.choices || []).map(c => ({ id: c, label: c }));
     opts.forEach(opt => {
       const o = document.createElement('option');
@@ -1215,14 +1301,13 @@ function createInputForColumn(col, meta, element = {}) {
       sel.appendChild(o);
     });
 
-    // Permettre la sélection/déselection au simple clic
+    // Allow toggle selection with single click
     sel.addEventListener('mousedown', function (e) {
       e.preventDefault();
       const option = e.target;
       if (option.tagName === 'OPTION') {
         option.selected = !option.selected;
         sel.focus();
-        // Déclencher l'événement change pour la mise à jour conditionnelle
         sel.dispatchEvent(new Event('change'));
       }
     });
@@ -1230,13 +1315,16 @@ function createInputForColumn(col, meta, element = {}) {
     return sel;
   }
 
+  // Choice or Ref columns: single-select dropdown
   if ((meta.choices && meta.choices.length > 0) || (meta.isRef && meta.refChoices.length > 0)) {
     inp = document.createElement('select');
     inp.id = `input_${col}`;
+    // Add empty placeholder option
     const empty = document.createElement('option');
     empty.value = '';
     empty.textContent = '-- Sélectionner --';
     inp.appendChild(empty);
+    // Use refChoices for Ref, or map choices for Choice
     const opts = meta.refChoices.length > 0 ? meta.refChoices : meta.choices.map(c => ({ id: c, label: c }));
     opts.forEach(opt => {
       const o = document.createElement('option');
@@ -1247,7 +1335,7 @@ function createInputForColumn(col, meta, element = {}) {
     return inp;
   }
 
-  // Champ texte multiligne ou simple
+  // Text field: textarea if multiline enabled, otherwise simple input
   if (element.multiline) {
     inp = document.createElement('textarea');
     inp.id = `input_${col}`;
@@ -1255,56 +1343,76 @@ function createInputForColumn(col, meta, element = {}) {
     return inp;
   }
 
+  // Default: single-line text input
   inp = document.createElement('input');
   inp.type = 'text';
   inp.id = `input_${col}`;
   return inp;
 }
 
+// -----------------------------------------------------------------------------
+// FORM VALUE HANDLING
+// -----------------------------------------------------------------------------
+
+// Sanitize text input: trim, remove control chars, limit length
 function sanitizeText(value) {
   if (typeof value !== 'string') return value;
   return value
     .trim()
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Supprime caractères de contrôle
-    .substring(0, 50000); // Limite raisonnable
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .substring(0, 50000);
 }
 
+// Get value from form input, converted to appropriate Grist type
+// Handles type conversion for each column type before sending to Grist API
 function getInputValue(col, meta) {
   const inp = document.getElementById(`input_${col}`);
   if (!inp) return null;
 
+  // Boolean: return checkbox state
   if (meta.isBool) return inp.checked;
 
-  // Les PJ sont gérées séparément via uploadAttachments
+  // Attachments are handled separately via uploadAttachments
   if (meta.isAttachment) return null;
 
+  // ChoiceList/RefList: return Grist list format ['L', val1, val2, ...]
   if (meta.isMultiple) {
     const selected = Array.from(inp.selectedOptions).map(opt => opt.value);
     const values = meta.isRef ? selected.map(v => parseInt(v)) : selected;
     return ["L", ...values];
   }
 
+  // Ref: return integer ID or null
   if (meta.isRef) return inp.value ? parseInt(inp.value) : null;
-  // Permettre la virgule comme séparateur décimal
+
+  // Numeric: parse float, accepting comma as decimal separator
   if (meta.isNumeric || meta.isInt) {
     const val = sanitizeText(inp.value);
     return val ? parseFloat(val.replace(',', '.')) : null;
   }
 
+  // Default (text): return sanitized string
   return sanitizeText(inp.value);
 }
 
+// -----------------------------------------------------------------------------
+// FORM VALIDATION
+// -----------------------------------------------------------------------------
+
+// Validate a single field, show error message if invalid
+// Checks: required fields, numeric format, integer format, max length
+// Returns true if valid, false if invalid
 function validateField(col, meta, element) {
   const inp = document.getElementById(`input_${col}`);
   const err = document.getElementById(`error_${col}`);
 
+  // Clear previous error state
   inp.classList.remove('error');
   if (err) err.classList.remove('show');
 
-  // Vérifier si le champ est requis
+  // Required field validation
   if (element.required) {
     if (meta.isBool) {
-      // Si le champ booléen est obligatoire, il doit être coché
       if (!inp.checked) {
         inp.classList.add('error');
         if (err) {
@@ -1314,7 +1422,6 @@ function validateField(col, meta, element) {
         return false;
       }
     } else if (meta.isAttachment) {
-      // Vérifier qu'au moins une PJ est sélectionnée
       if (!pendingAttachments[col] || pendingAttachments[col].length === 0) {
         inp.classList.add('error');
         if (err) {
@@ -1345,12 +1452,11 @@ function validateField(col, meta, element) {
     }
   }
 
-  // Validation numérique
+  // Numeric validation
   if (meta.isNumeric || meta.isInt) {
     const val = inp.value.trim();
     if (val === '') return true;
 
-    // Permettre la virgule comme séparateur décimal
     const normalizedVal = val.replace(',', '.');
     const num = parseFloat(normalizedVal);
     if (isNaN(num)) {
@@ -1372,7 +1478,7 @@ function validateField(col, meta, element) {
     }
   }
 
-  // Validation de la longueur maximale
+  // Max length validation
   if (element.maxLength && !meta.isBool && !meta.isDate && !meta.isMultiple) {
     const val = inp.value;
     if (val.length > element.maxLength) {
@@ -1388,20 +1494,29 @@ function validateField(col, meta, element) {
   return true;
 }
 
+// -----------------------------------------------------------------------------
+// CONDITIONAL FIELD DISPLAY (only available for column types Choice and Ref)
+// -----------------------------------------------------------------------------
+
+// Determines if a field should be visible based on its conditional rule
+// A conditional rule is: "show this field if [otherField] [equals/notEquals] [value]"
+// Returns true if: no condition set, or condition is satisfied
 function shouldShowField(element) {
   if (!element.conditional) return true;
 
-  const conditionalField = element.conditional.field;
-  const conditionalValue = element.conditional.value;
-  const conditionalOperator = element.conditional.operator || 'equals';
+  const conditionalField = element.conditional.field;    // Field we depend on (eg "Status")
+  const conditionalValue = element.conditional.value;    // Expected value (eg "Active" or ref ID)
+  const conditionalOperator = element.conditional.operator; // "equal to" or "not equal to"
 
+  // Get the current value of the field we depend on
   const inp = document.getElementById(`input_${conditionalField}`);
   if (!inp) return true;
 
   const meta = columnMetadata[conditionalField];
   if (!meta) return true;
 
-  // Récupérer la valeur actuelle du champ conditionnel
+  // For Ref columns: compare numeric IDs (not display labels)
+  // HTML select values are strings, so we convert to int for proper comparison
   let currentValue;
   if (meta.isRef) {
     currentValue = inp.value ? parseInt(inp.value) : null;
@@ -1409,15 +1524,38 @@ function shouldShowField(element) {
     currentValue = inp.value;
   }
 
-  // Comparer avec la valeur conditionnelle
   const expectedValue = meta.isRef ? parseInt(conditionalValue) : conditionalValue;
 
+  // Evaluate the condition
   if (conditionalOperator === 'notEquals') {
     return currentValue != expectedValue;
   }
   return currentValue == expectedValue;
 }
 
+// Re-evaluate all conditional rules and update field visibility
+// Called whenever a field value changes
+function updateConditionalFields() {
+  formElements.forEach(element => {
+    if (element.type === 'field') {
+      const fieldDiv = document.getElementById(`field_${element.fieldName}`);
+      if (fieldDiv) {
+        if (shouldShowField(element)) {
+          fieldDiv.classList.remove('hidden');
+        } else {
+          fieldDiv.classList.add('hidden');
+        }
+      }
+    }
+  });
+}
+
+// -----------------------------------------------------------------------------
+// FORM RENDERING
+// -----------------------------------------------------------------------------
+
+// Render the actual form based on configuration
+// Creates form elements (fields, separators, text blocks) in the DOM
 function renderForm() {
   fieldsContainer.innerHTML = '';
 
@@ -1427,6 +1565,7 @@ function renderForm() {
       sep.className = 'separator';
       fieldsContainer.appendChild(sep);
     } else if (element.type === 'title') {
+      // Legacy support for 'title' type
       const title = document.createElement('div');
       title.className = 'custom-title';
       title.innerHTML = element.content;
@@ -1444,7 +1583,6 @@ function renderForm() {
       fieldDiv.className = meta.isBool ? 'field checkbox-field' : 'field';
       fieldDiv.id = `field_${col}`;
 
-      // Vérifier si le champ doit être affiché
       if (!shouldShowField(element)) {
         fieldDiv.classList.add('hidden');
       }
@@ -1457,16 +1595,15 @@ function renderForm() {
 
       const inp = createInputForColumn(col, meta, element);
 
-      // Ajouter un event listener pour mettre à jour l'affichage conditionnel
+      // Update conditional fields when value changes
       inp.addEventListener('change', () => {
         updateConditionalFields();
       });
 
       if (meta.isBool) {
-        // Checkbox en premier, puis le label
+        // Checkbox layout: input first, then label
         fieldDiv.appendChild(inp);
         fieldDiv.appendChild(label);
-        // Ajouter un élément d'erreur pour les champs booléens obligatoires
         const err = document.createElement('div');
         err.className = 'error-message';
         err.id = `error_${col}`;
@@ -1485,43 +1622,32 @@ function renderForm() {
   });
 }
 
-function updateConditionalFields() {
-  formElements.forEach(element => {
-    if (element.type === 'field') {
-      const fieldDiv = document.getElementById(`field_${element.fieldName}`);
-      if (fieldDiv) {
-        if (shouldShowField(element)) {
-          fieldDiv.classList.remove('hidden');
-        } else {
-          fieldDiv.classList.add('hidden');
-        }
-      }
-    }
-  });
-}
-
+// Re-render form when records change (to update ref choices)
 grist.onRecords(() => {
   renderForm();
 });
 
+// -----------------------------------------------------------------------------
+// FORM SUBMISSION
+// -----------------------------------------------------------------------------
 
+// Handle form submission: validate, upload attachments, create record, reset form
 addButton.addEventListener('click', async () => {
   let valid = true;
-  let errorMessages = [];
 
+  // Hide any previous error/success messages
   formError.classList.remove('show');
   formSuccess.classList.remove('show');
 
+  // Validate all visible fields (hidden conditional fields are skipped)
   formElements.forEach(element => {
     if (element.type === 'field') {
       const col = element.fieldName;
       const meta = columnMetadata[col] || {};
 
-      // Ne valider que si le champ est visible
       if (shouldShowField(element)) {
         if (!validateField(col, meta, element)) {
           valid = false;
-          errorMessages.push(`${element.fieldLabel || col}`);
         }
       }
     }
@@ -1533,13 +1659,13 @@ addButton.addEventListener('click', async () => {
     return;
   }
 
+  // Collect field values (except attachments)
   const fields = {};
   formElements.forEach(element => {
     if (element.type === 'field') {
       const col = element.fieldName;
       const meta = columnMetadata[col] || {};
 
-      // Ne collecter que les champs visibles (sauf PJ, gérées après)
       if (shouldShowField(element) && !meta.isAttachment) {
         fields[col] = getInputValue(col, meta);
       }
@@ -1547,7 +1673,7 @@ addButton.addEventListener('click', async () => {
   });
 
   try {
-    // Uploader les PJ d'abord
+    // Upload attachments first
     for (const element of formElements) {
       if (element.type === 'field') {
         const col = element.fieldName;
@@ -1562,15 +1688,16 @@ addButton.addEventListener('click', async () => {
       }
     }
 
+    // Create new record
     await grist.selectedTable.create({ fields });
 
-    // Afficher le message de succès
+    // Show success message
     formSuccess.classList.add('show');
     setTimeout(() => {
       formSuccess.classList.remove('show');
     }, 3000);
 
-    // Réinitialiser le formulaire
+    // Reset form: clear all inputs based on their type
     formElements.forEach(element => {
       if (element.type === 'field') {
         const col = element.fieldName;
@@ -1580,10 +1707,12 @@ addButton.addEventListener('click', async () => {
         if (meta.isBool) {
           inp.checked = false;
         } else if (meta.isAttachment) {
+          // Clear pending files and file list display
           pendingAttachments[col] = [];
           const fileList = document.getElementById(`files_${col}`);
           if (fileList) fileList.innerHTML = '';
         } else if (meta.isMultiple) {
+          // Deselect all options in multi-select
           Array.from(inp.options).forEach(opt => opt.selected = false);
         } else {
           inp.value = '';
@@ -1591,8 +1720,9 @@ addButton.addEventListener('click', async () => {
       }
     });
 
-    // Mettre à jour l'affichage conditionnel après réinitialisation
+    // Re-evaluate conditional fields after reset
     updateConditionalFields();
+
   } catch (error) {
     formError.textContent = "Erreur: " + error.message;
     formError.classList.add('show');
