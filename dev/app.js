@@ -450,7 +450,7 @@ const app = createApp({
       if (type === 'column') {
         const col = selectedColumn.value;
         if (!col) {
-          alert('Veuillez selectionner une colonne');
+          alert('Veuillez sélectionner une colonne');
           return;
         }
         // Add field element linked to this column
@@ -971,7 +971,7 @@ const app = createApp({
       // Required field validation
       if (element.required) {
         if (meta?.isBool && !value) {
-          errors[col] = 'Ce champ doit etre coche';
+          errors[col] = 'Ce champ doit être coché';
           return false;
         }
         if (meta?.isMultiple && (!value || value.length === 0)) {
@@ -993,14 +993,14 @@ const app = createApp({
           return false;
         }
         if (meta?.isInt && !Number.isInteger(num)) {
-          errors[col] = 'Valeur entiere requise';
+          errors[col] = 'Valeur entière requise';
           return false;
         }
       }
 
       // Max length validation
       if (element.maxLength && value && value.length > element.maxLength) {
-        errors[col] = `Maximum ${element.maxLength} caracteres`;
+        errors[col] = `Maximum ${element.maxLength} caractères`;
         return false;
       }
 
@@ -1087,7 +1087,7 @@ const app = createApp({
         await grist.selectedTable.create({ fields });
 
         // Show success message
-        formSuccessMessage.value = 'Votre reponse a bien ete enregistree';
+        formSuccessMessage.value = 'Votre réponse a bien été enregistrée';
         setTimeout(() => {
           formSuccessMessage.value = '';
         }, 3000);
@@ -1108,7 +1108,7 @@ const app = createApp({
           }
         });
       } catch (error) {
-        formErrorMessage.value = 'Erreur: ' + error.message;
+        formErrorMessage.value = 'Erreur :' + error.message;
       }
     }
 
