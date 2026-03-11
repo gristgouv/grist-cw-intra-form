@@ -443,7 +443,7 @@ const app = createApp({
 
     // Add new element to form configuration
     // Handles column fields, separators, and text blocks
-    function addElement() {
+    async function addElement() {
       const type = newElementType.value;
       if (!type) return;
 
@@ -474,7 +474,7 @@ const app = createApp({
         formElements.value.push({ type: 'text', content: content || '' });
       }
 
-      saveConfiguration();
+      await saveConfiguration();
 
       // Reset the "Add element" panel
       newElementType.value = '';
@@ -484,15 +484,15 @@ const app = createApp({
 
     // Remove element from form configuration
     // Column becomes available again after removal
-    function removeElement(index) {
+    async function removeElement(index) {
       formElements.value.splice(index, 1);
-      saveConfiguration();
+      await saveConfiguration();
     }
 
     // Toggle required status for a field
-    function toggleRequired(index) {
+    async function toggleRequired(index) {
       formElements.value[index].required = !formElements.value[index].required;
-      saveConfiguration();
+      await saveConfiguration();
     }
 
     // -------------------------------------------------------------------------
@@ -527,7 +527,7 @@ const app = createApp({
 
     // Called when element is dropped
     // Reorders formElements array and saves configuration
-    function onDrop(index) {
+    async function onDrop(index) {
       if (draggedIndex.value === null || draggedIndex.value === index) return;
 
       const fromIndex = draggedIndex.value;
@@ -540,7 +540,7 @@ const app = createApp({
       const element = formElements.value.splice(fromIndex, 1)[0];
       formElements.value.splice(toIndex, 0, element);
 
-      saveConfiguration();
+      await saveConfiguration();
       onDragEnd();
     }
 
@@ -578,10 +578,10 @@ const app = createApp({
     }
 
     // Save edit popup changes (kept for compatibility)
-    function saveEdit() {
+    async function saveEdit() {
       if (editPopup.value.trim()) {
         formElements.value[editPopup.index][editPopup.property] = editPopup.value;
-        saveConfiguration();
+        await saveConfiguration();
       }
       editPopup.show = false;
       showOverlay.value = false;
@@ -722,11 +722,11 @@ const app = createApp({
     }
 
     // Save rich editor content
-    function saveRichEdit() {
+    async function saveRichEdit() {
       const content = richEditor.value?.innerHTML?.trim();
       if (content && content !== '<br>') {
         formElements.value[editPopup.index][editPopup.property] = content;
-        saveConfiguration();
+        await saveConfiguration();
       }
       closeEditPopup();
     }
@@ -787,7 +787,7 @@ const app = createApp({
     }
 
     // Save the conditional rule configuration
-    function saveFilter() {
+    async function saveFilter() {
       // Only save if both field and value are selected, otherwise clear the rule
       if (filterPopup.field && filterPopup.value) {
         formElements.value[filterPopup.index].conditional = {
@@ -798,15 +798,15 @@ const app = createApp({
       } else {
         formElements.value[filterPopup.index].conditional = null;
       }
-      saveConfiguration();
+      await saveConfiguration();
       filterPopup.show = false;
       showOverlay.value = false;
     }
 
     // Remove the conditional rule from this field
-    function deleteFilter() {
+    async function deleteFilter() {
       formElements.value[filterPopup.index].conditional = null;
-      saveConfiguration();
+      await saveConfiguration();
       filterPopup.show = false;
       showOverlay.value = false;
     }
@@ -847,18 +847,18 @@ const app = createApp({
     }
 
     // Save maxLength validation
-    function saveValidation() {
+    async function saveValidation() {
       const maxLength = validationPopup.maxLength;
       formElements.value[validationPopup.index].maxLength = maxLength ? parseInt(maxLength) : null;
-      saveConfiguration();
+      await saveConfiguration();
       validationPopup.show = false;
       showOverlay.value = false;
     }
 
     // Remove maxLength validation
-    function deleteValidation() {
+    async function deleteValidation() {
       formElements.value[validationPopup.index].maxLength = null;
-      saveConfiguration();
+      await saveConfiguration();
       validationPopup.show = false;
       showOverlay.value = false;
     }
@@ -868,9 +868,9 @@ const app = createApp({
     // -------------------------------------------------------------------------
 
     // Toggle multiline for a text field (displays textarea instead of input)
-    function toggleMultiline(index) {
+    async function toggleMultiline(index) {
       formElements.value[index].multiline = !formElements.value[index].multiline;
-      saveConfiguration();
+      await saveConfiguration();
     }
 
     // -------------------------------------------------------------------------
