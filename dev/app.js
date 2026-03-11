@@ -319,7 +319,8 @@ const app = createApp({
 
           // For Choice/ChoiceList columns: extract choices from widgetOptions JSON
           // Example: {"choices": ["Option A", "Option B", "Option C"]}
-          if (colsInfo.widgetOptions?.[i]) {
+          // Note: Check type first because Grist keeps widgetOptions after column type conversion
+          if ((type === 'Choice' || type === 'ChoiceList') && colsInfo.widgetOptions?.[i]) {
             try {
               const options = JSON.parse(colsInfo.widgetOptions[i]);
               if (options.choices) choices = options.choices;
@@ -423,6 +424,34 @@ const app = createApp({
           if (el.type === 'field' && el.fieldLabel) {
             el.fieldLabel = DOMPurify.sanitize(el.fieldLabel, sanitizeConfig);
           }
+
+          // Clean up invalid properties based on current column type
+          if (el.type === 'field') {
+            const meta = columnMetadata.value[el.fieldName];
+
+            // multiline: only valid for pure text fields
+            if (el.multiline && !isPureTextFieldByMeta(meta)) {
+              delete el.multiline;
+            }
+
+            // maxLength: only valid for text/numeric/int fields
+            if (el.maxLength != null && !isTextOrNumericFieldByMeta(meta)) {
+              delete el.maxLength;
+            }
+
+            // conditional: verify that the referenced field is still a valid condition field
+            if (el.conditional) {
+              const condMeta = columnMetadata.value[el.conditional.field];
+              const isValidConditionField = condMeta && (
+                (condMeta.choices?.length > 0 && !condMeta.isMultiple) ||
+                (condMeta.isRef && !condMeta.isMultiple && condMeta.refChoices?.length > 0)
+              );
+              if (!isValidConditionField) {
+                delete el.conditional;
+              }
+            }
+          }
+
           return el;
         });
       }
@@ -845,22 +874,30 @@ const app = createApp({
     // FIELD TYPE HELPERS
     // -------------------------------------------------------------------------
 
-    // Check if a field is text or numeric (can have maxLength validation)
-    // TODO : must reset if column type change
-    function isTextOrNumericField(element) {
-      if (element.type !== 'field') return false;
-      const meta = columnMetadata.value[element.fieldName];
+    // Check if metadata indicates a text or numeric field (can have maxLength validation)
+    function isTextOrNumericFieldByMeta(meta) {
       if (!meta) return false;
       return !meta.isBool && !meta.isDate && !meta.isMultiple && !meta.isAttachment &&
         (!meta.choices || meta.choices.length === 0) &&
         (!meta.isRef || meta.refChoices.length === 0);
     }
 
+    // Check if metadata indicates a pure text field (can be multiline)
+    function isPureTextFieldByMeta(meta) {
+      if (!isTextOrNumericFieldByMeta(meta)) return false;
+      return !meta.isNumeric && !meta.isInt;
+    }
+
+    // Check if a field is text or numeric (can have maxLength validation)
+    function isTextOrNumericField(element) {
+      if (element.type !== 'field') return false;
+      return isTextOrNumericFieldByMeta(columnMetadata.value[element.fieldName]);
+    }
+
     // Check if a field is pure text (can be multiline)
     function isPureTextField(element) {
-      if (!isTextOrNumericField(element)) return false;
-      const meta = columnMetadata.value[element.fieldName];
-      return !meta.isNumeric && !meta.isInt;
+      if (element.type !== 'field') return false;
+      return isPureTextFieldByMeta(columnMetadata.value[element.fieldName]);
     }
 
     // -------------------------------------------------------------------------
