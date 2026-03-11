@@ -1011,8 +1011,8 @@ const app = createApp({
         }
       }
 
-      // Max length validation
-      if (element.maxLength && value && value.length > element.maxLength) {
+      // Max length validation (only for text/numeric fields)
+      if (element.maxLength && isTextOrNumericField(element) && value && value.length > element.maxLength) {
         errors[col] = `Maximum ${element.maxLength} caractères`;
         return false;
       }
