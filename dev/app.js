@@ -414,15 +414,20 @@ const app = createApp({
       formElements.value.forEach(el => {
         if (el.type === 'field') {
           const meta = columnMetadata.value[el.fieldName];
-          if (meta?.isBool) {
-            formData[el.fieldName] = false;
-          } else if (meta?.isMultiple) {
-            formData[el.fieldName] = [];
-          } else {
-            formData[el.fieldName] = '';
-          }
+          formData[el.fieldName] = defaultValue(meta);
         }
       });
+    }
+
+    // Get default value based on column type
+    function defaultValue(meta) {
+      if (meta?.isBool) {
+        return false;
+      } else if (meta?.isMultiple) {
+        return [];
+      } else {
+        return '';
+      }
     }
 
     // Save form configuration to Grist widget options
@@ -464,7 +469,7 @@ const app = createApp({
           conditional: null
         });
         // Initialize form data for this field
-        formData[col] = meta?.isBool ? false : (meta?.isMultiple ? [] : '');
+        formData[col] = defaultValue(meta);
       } else if (type === 'separator') {
         // Add horizontal separator
         formElements.value.push({ type: 'separator', content: '' });
