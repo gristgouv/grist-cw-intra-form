@@ -452,8 +452,8 @@ select[multiple] option:checked {
 .separator {
   height: 1px;
   background: #e0e0e0;
-  margin: 40px auto;
-  width: 60%;
+  margin: 48px auto;
+  width: 100%;
 }
 
 .custom-title {

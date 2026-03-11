@@ -196,16 +196,17 @@ const app = createApp({
     // Apply global font and padding styles to form container
     // TODO: em instead of px
     const containerStyle = computed(() => {
-      let padding = '24px';
+      let paddingX = '24px';
       switch (globalPadding.value) {
-        case 'small': padding = '12px'; break;
-        case 'medium': padding = '24px'; break;
-        case 'large': padding = '40px'; break;
+        case 'small': paddingX = '12px'; break;
+        case 'medium': paddingX = '40px'; break;
+        case 'large': paddingX = '64px'; break;
       }
 
       return {
         fontFamily: globalFont.value || 'inherit',
-        padding
+        paddingLeft: paddingX,
+        paddingRight: paddingX
       };
     });
 
