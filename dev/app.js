@@ -43,7 +43,7 @@ const app = createApp({
       return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
     }
 
-    // Trigger hidden file input click
+    // Trigger attachment modal input click
     function triggerFileInput(col) {
       document.getElementById('file_' + col)?.click();
     }
@@ -81,7 +81,7 @@ const app = createApp({
       event.target.value = '';
     }
 
-    // Remove attachment from pending list
+    // Remove attachment from list
     function removeAttachment(col, index) {
       pendingAttachments[col].splice(index, 1);
     }
@@ -187,6 +187,7 @@ const app = createApp({
     // -------------------------------------------------------------------------
 
     // Apply global font and padding styles to form container
+    // TODO: em instead of px
     const containerStyle = computed(() => {
       let padding = '24px';
       switch (globalPadding.value) {
@@ -204,14 +205,16 @@ const app = createApp({
     // Update column dropdown to show only unused, non-formula columns
     // Called when opening the config modal or after adding/removing a field
     const availableColumns = computed(() => {
-      // Get list of columns already used in the form
-      const usedColumns = formElements.value
-        .filter(el => el.type === 'field')
-        .map(el => el.fieldName);
+      // Get set of columns already used in the form (O(1) lookup)
+      const usedColumns = new Set(
+          formElements.value
+              .filter(el => el.type === 'field')
+              .map(el => el.fieldName)
+      );
 
       // Filter out already used columns and formula columns (which can't be edited)
       return columns.value.filter(col => {
-        if (usedColumns.includes(col)) return false;
+        if (usedColumns.has(col)) return false;
         const meta = columnMetadata.value[col];
         if (meta?.isFormula) return false;
         return true;
@@ -219,7 +222,7 @@ const app = createApp({
     });
 
     // Get fields that can be used as conditions (single Choice or Ref)
-    const conditionalFields = computed(() => {
+    const eligibleFieldsForConditions = computed(() => {
       return formElements.value.filter(el => {
         if (el.type !== 'field') return false;
         const meta = columnMetadata.value[el.fieldName];
@@ -237,9 +240,11 @@ const app = createApp({
       // Fetch table structure then load saved config
       columnMetadata.value = await getColumnMetadata();
       columns.value = Object.keys(columnMetadata.value);
+
+      // Load form configuration from Grist widget options
       await loadConfiguration();
 
-      // Re-render when records change (to update ref choices)
+      // Re-render when value added to ref column (to update ref choices)
       grist.onRecords(() => {
         getColumnMetadata().then(meta => {
           columnMetadata.value = meta;
@@ -256,8 +261,8 @@ const app = createApp({
     async function getColumnMetadata() {
       try {
         // Get current table name (eg "Table1")
-        const table = await grist.getTable();
-        const currentTableId = await table._platform.getTableId();
+        const table = grist.getTable();
+        const currentTableId = await table.getTableId();
 
         // _grist_Tables_column: list of all columns across all tables
         // eg   {
@@ -399,7 +404,8 @@ const app = createApp({
           maxLength: null,
           conditional: null
         }));
-
+        
+       // TODO : make it reactive instead
         await grist.setOptions({ initialized: true, formElements: toRaw(formElements.value) });
       } else {
         // Load existing configuration
@@ -419,7 +425,6 @@ const app = createApp({
       });
     }
 
-    // Get default value based on column type
     function defaultValue(meta) {
       if (meta?.isBool) {
         return false;
@@ -433,6 +438,7 @@ const app = createApp({
     // Save form configuration to Grist widget options
     // Note: We use toRaw to convert Vue Proxy objects to plain JS objects
     // because Grist's setOptions() uses postMessage which cannot clone Proxy objects
+    // TODO : make it reactive instead
     async function saveConfiguration() {
       await grist.setOptions({
         initialized: true,
@@ -494,7 +500,7 @@ const app = createApp({
       await saveConfiguration();
     }
 
-    // Toggle required status for a field
+    // Toggle "required status" for a field
     async function toggleRequired(index) {
       formElements.value[index].required = !formElements.value[index].required;
       await saveConfiguration();
@@ -563,7 +569,7 @@ const app = createApp({
     // Show edit popup for field label
     function editLabel(index) {
       const el = formElements.value[index];
-      editPopup.title = 'Modifier le libelle';
+      editPopup.title = 'Modifier le libellé';
       editPopup.value = el.fieldLabel || el.fieldName;
       editPopup.index = index;
       editPopup.property = 'fieldLabel';
@@ -597,6 +603,7 @@ const app = createApp({
     // -------------------------------------------------------------------------
 
     // Update active format states based on current selection
+    // The queryCommandState() is officially obsolete/deprecated but there's no alternative...(see execCommand) 
     function updateActiveFormats() {
       activeFormats.bold = document.queryCommandState('bold');
       activeFormats.italic = document.queryCommandState('italic');
@@ -604,6 +611,7 @@ const app = createApp({
     }
 
     // Execute a formatting command on the editor
+    // The execCommand() is officially obsolete/deprecated but there's no alternative...
     function execCmd(command) {
       document.execCommand(command, false, null);
       updateActiveFormats();
@@ -622,7 +630,7 @@ const app = createApp({
 
     // Insert a link at cursor position
     function insertLink() {
-      const url = prompt('URL du lien:');
+      const url = prompt('URL du lien :');
       if (url) {
         const selection = window.getSelection();
         const text = selection.toString() || url;
@@ -827,6 +835,7 @@ const app = createApp({
     // -------------------------------------------------------------------------
 
     // Check if a field is text or numeric (can have maxLength validation)
+    // TODO : must reset if column type change
     function isTextOrNumericField(element) {
       if (element.type !== 'field') return false;
       const meta = columnMetadata.value[element.fieldName];
@@ -914,16 +923,9 @@ const app = createApp({
 
       // Evaluate the condition
       if (conditionalOperator === 'notEquals') {
-        return compareValue != expectedValue;
+        return compareValue !== expectedValue;
       }
-      return compareValue == expectedValue;
-    }
-
-    // Re-evaluate all conditional rules and update field visibility
-    // Called whenever a field value changes
-    // Note: In Vue, this is handled automatically by reactivity
-    function updateConditionalFields() {
-      // Vue handles reactivity automatically
+      return compareValue === expectedValue;
     }
 
     // -------------------------------------------------------------------------
@@ -1000,7 +1002,7 @@ const app = createApp({
         const normalizedVal = value.toString().replace(',', '.');
         const num = parseFloat(normalizedVal);
         if (isNaN(num)) {
-          errors[col] = 'Valeur numerique requise';
+          errors[col] = 'Valeur numérique requise';
           return false;
         }
         if (meta?.isInt && !Number.isInteger(num)) {
@@ -1107,19 +1109,16 @@ const app = createApp({
         formElements.value.forEach(el => {
           if (el.type === 'field') {
             const meta = columnMetadata.value[el.fieldName];
+            
             if (meta?.isAttachment) {
               pendingAttachments[el.fieldName] = [];
-            } else if (meta?.isBool) {
-              formData[el.fieldName] = false;
-            } else if (meta?.isMultiple) {
-              formData[el.fieldName] = [];
             } else {
-              formData[el.fieldName] = '';
+              pendingAttachments[el.fieldName] = defaultValue(meta);
             }
           }
         });
       } catch (error) {
-        formErrorMessage.value = 'Erreur :' + error.message;
+        formErrorMessage.value = 'Erreur : ' + error.message;
       }
     }
 
@@ -1159,7 +1158,7 @@ const app = createApp({
       // Computed
       containerStyle,
       availableColumns,
-      conditionalFields,
+      conditionalFields: eligibleFieldsForConditions,
 
       // Methods
       formatFileSize,
@@ -1202,7 +1201,6 @@ const app = createApp({
       deleteValidation,
       toggleMultiline,
       shouldShowField,
-      updateConditionalFields,
       getLabelHtml,
       hasSelectOptions,
       getSelectOptions,

@@ -92,7 +92,7 @@
                 <div class="icon-btn" @click="editLabel(index)" title="Modifier le libelle">&#9998;</div>
                 <div class="icon-btn" :class="{ active: element.required }" @click="toggleRequired(index)" title="Obligatoire">&#10022;</div>
                 <div class="icon-btn" :class="{ active: element.conditional }" @click="showFilterPopup(index)" title="Conditionnel">&#9889;</div>
-                <div v-if="isTextOrNumericField(element)" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" title="Critere de validation">&#10003;</div>
+                <div v-if="isTextOrNumericField(element)" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" title="Critère de validation">&#10003;</div>
                 <div v-if="isPureTextField(element)" class="icon-btn" :class="{ active: element.multiline }" @click="toggleMultiline(index)" title="Multiligne">&#9776;</div>
               </template>
               <!-- Bouton edit pour texte -->
@@ -109,13 +109,13 @@
         <div class="add-section">
           <div class="add-section-fields">
             <select v-model="newElementType" class="element-input">
-              <option value="">-- Type d'element --</option>
+              <option value="">-- Type d'élément --</option>
               <option value="column">Colonne de la table</option>
-              <option value="separator">Separateur</option>
+              <option value="separator">Séparateur</option>
               <option value="text">Texte libre</option>
             </select>
             <select v-if="newElementType === 'column'" v-model="selectedColumn" class="element-input">
-              <option value="">-- Selectionner une colonne --</option>
+              <option value="">-- Sélectionner une colonne --</option>
               <option v-for="col in availableColumns" :key="col" :value="col">{{ col }}</option>
             </select>
             <textarea v-if="newElementType === 'text'" v-model="newElementContent" class="element-input" rows="3" placeholder="Texte"></textarea>
@@ -128,7 +128,7 @@
     <!-- Formulaire principal -->
     <div class="container" :style="containerStyle">
       <template v-for="element in formElements" :key="element.fieldName || element.content">
-        <!-- Separateur -->
+        <!-- Séparateur -->
         <div v-if="element.type === 'separator'" class="separator"></div>
         <!-- Texte -->
         <div v-else-if="element.type === 'text'" class="custom-text" v-html="element.content"></div>
@@ -139,7 +139,7 @@
           :class="{ 'checkbox-field': columnMetadata[element.fieldName]?.isBool, hidden: !shouldShowField(element) }"
         >
           <template v-if="columnMetadata[element.fieldName]?.isBool">
-            <input type="checkbox" v-model="formData[element.fieldName]" @change="updateConditionalFields">
+            <input type="checkbox" v-model="formData[element.fieldName]">
             <label v-html="getLabelHtml(element)"></label>
           </template>
           <template v-else>
@@ -168,14 +168,12 @@
               v-else-if="columnMetadata[element.fieldName]?.isDate"
               type="date"
               v-model="formData[element.fieldName]"
-              @change="updateConditionalFields"
             >
             <!-- Select multiple (ChoiceList, RefList) -->
             <select
               v-else-if="columnMetadata[element.fieldName]?.isMultiple"
               multiple
               v-model="formData[element.fieldName]"
-              @change="updateConditionalFields"
             >
               <option
                 v-for="opt in getSelectOptions(element)"
@@ -187,9 +185,8 @@
             <select
               v-else-if="hasSelectOptions(element)"
               v-model="formData[element.fieldName]"
-              @change="updateConditionalFields"
             >
-              <option value="">-- Selectionner --</option>
+              <option value="">-- Sélectionner --</option>
               <option
                 v-for="opt in getSelectOptions(element)"
                 :key="opt.id"
@@ -201,14 +198,12 @@
               v-else-if="element.multiline"
               v-model="formData[element.fieldName]"
               rows="4"
-              @change="updateConditionalFields"
             ></textarea>
             <!-- Input texte/numerique par defaut -->
             <input
               v-else
               type="text"
               v-model="formData[element.fieldName]"
-              @input="updateConditionalFields"
             >
           </template>
           <div v-if="errors[element.fieldName]" class="error-message show">{{ errors[element.fieldName] }}</div>
@@ -279,23 +274,23 @@
     <div v-if="filterPopup.show" class="filter-popup">
       <h3>Affichage conditionnel</h3>
       <div class="filter-row">
-        <label>Ce champ est affiche si :</label>
+        <label>Ce champ est affiché si :</label>
       </div>
       <div class="filter-row">
         <select v-model="filterPopup.field" @change="updateFilterValues">
-          <option value="">-- Selectionner un champ --</option>
+          <option value="">-- Sélectionner un champ --</option>
           <option v-for="f in conditionalFields" :key="f.fieldName" :value="f.fieldName">{{ f.fieldName }}</option>
         </select>
       </div>
       <div class="filter-row">
         <select v-model="filterPopup.operator">
-          <option value="equals">est egal a</option>
-          <option value="notEquals">n'est pas egal a</option>
+          <option value="equals">est égal à</option>
+          <option value="notEquals">n'est pas égal à</option>
         </select>
       </div>
       <div class="filter-row">
         <select v-model="filterPopup.value">
-          <option value="">-- Selectionner une valeur --</option>
+          <option value="">-- Sélectionner une valeur --</option>
           <option v-for="v in filterPopup.values" :key="v.id" :value="v.id">{{ v.label }}</option>
         </select>
       </div>
@@ -311,7 +306,7 @@
     <!-- Popup de validation (maxLength) -->
     <div v-if="validationPopup.show" class="validation-popup">
       <h3>Validation du champ</h3>
-      <label>Nombre max de caracteres :</label>
+      <label>Nombre max de caractères :</label>
       <input type="number" v-model="validationPopup.maxLength" min="1">
       <div class="validation-popup-buttons">
         <button v-if="validationPopup.hasExisting" class="delete" @click="deleteValidation">Supprimer</button>
