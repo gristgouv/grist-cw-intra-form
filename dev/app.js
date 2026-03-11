@@ -608,6 +608,7 @@ const app = createApp({
       showOverlay.value = false;
       editPopup.show = false;
       filterPopup.show = false;
+      validationPopup.show = false;
     }
 
     // Show edit popup for field label
