@@ -4,7 +4,7 @@
 // conditional fields, rich text editing, and field validation.
 // =============================================================================
 
-const { createApp, ref, computed, reactive, onMounted } = Vue;
+const { createApp, ref, computed, reactive, onMounted, toRaw } = Vue;
 
 // Store reference to Vue app instance for grist.ready() callback
 let vueApp = null;
@@ -400,7 +400,7 @@ const app = createApp({
           conditional: null
         }));
 
-        await grist.setOptions({ initialized: true, formElements: formElements.value });
+        await grist.setOptions({ initialized: true, formElements: toRaw(formElements.value) });
       } else {
         // Load existing configuration
         formElements.value = options.formElements || [];
@@ -426,12 +426,12 @@ const app = createApp({
     }
 
     // Save form configuration to Grist widget options
-    // Note: We must use JSON.parse/stringify to convert Vue Proxy objects to plain JS objects
+    // Note: We use toRaw to convert Vue Proxy objects to plain JS objects
     // because Grist's setOptions() uses postMessage which cannot clone Proxy objects
     async function saveConfiguration() {
       await grist.setOptions({
         initialized: true,
-        formElements: JSON.parse(JSON.stringify(formElements.value)),
+        formElements: toRaw(formElements.value),
         globalFont: globalFont.value,
         globalPadding: globalPadding.value
       });
