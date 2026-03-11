@@ -6,6 +6,13 @@
 
 const { createApp, ref, computed, reactive, onMounted, toRaw } = Vue;
 
+// DOMPurify configuration for XSS protection (shared across all sanitization calls)
+const sanitizeConfig = {
+  ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'a', 'ul', 'li', 'h1', 'h2', 'h3', 'p', 'br', 'span'],
+  ALLOWED_ATTR: ['href', 'target', 'style'],
+  ALLOW_DATA_ATTR: false
+};
+
 // Store reference to Vue app instance for grist.ready() callback
 let vueApp = null;
 
@@ -408,8 +415,16 @@ const app = createApp({
        // TODO : make it reactive instead
         await grist.setOptions({ initialized: true, formElements: toRaw(formElements.value) });
       } else {
-        // Load existing configuration
-        formElements.value = options.formElements || [];
+        // Load existing configuration and sanitize HTML content for XSS protection
+        formElements.value = (options.formElements || []).map(el => {
+          if (el.type === 'text' && el.content) {
+            el.content = DOMPurify.sanitize(el.content, sanitizeConfig);
+          }
+          if (el.type === 'field' && el.fieldLabel) {
+            el.fieldLabel = DOMPurify.sanitize(el.fieldLabel, sanitizeConfig);
+          }
+          return el;
+        });
       }
 
       // Load global style settings
@@ -739,11 +754,7 @@ const app = createApp({
       const rawContent = richEditor.value?.innerHTML?.trim();
       if (rawContent && rawContent !== '<br>') {
         // Sanitize HTML to prevent XSS attacks
-        const content = DOMPurify.sanitize(rawContent, {
-          ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'a', 'ul', 'li', 'h1', 'h2', 'h3', 'p', 'br', 'span'],
-          ALLOWED_ATTR: ['href', 'target', 'style'],
-          ALLOW_DATA_ATTR: false
-        });
+        const content = DOMPurify.sanitize(rawContent, sanitizeConfig);
         formElements.value[editPopup.index][editPopup.property] = content;
         await saveConfiguration();
       }
