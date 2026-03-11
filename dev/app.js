@@ -728,8 +728,14 @@ const app = createApp({
 
     // Save rich editor content
     async function saveRichEdit() {
-      const content = richEditor.value?.innerHTML?.trim();
-      if (content && content !== '<br>') {
+      const rawContent = richEditor.value?.innerHTML?.trim();
+      if (rawContent && rawContent !== '<br>') {
+        // Sanitize HTML to prevent XSS attacks
+        const content = DOMPurify.sanitize(rawContent, {
+          ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'a', 'ul', 'li', 'h1', 'h2', 'h3', 'p', 'br', 'span'],
+          ALLOWED_ATTR: ['href', 'target', 'style'],
+          ALLOW_DATA_ATTR: false
+        });
         formElements.value[editPopup.index][editPopup.property] = content;
         await saveConfiguration();
       }
