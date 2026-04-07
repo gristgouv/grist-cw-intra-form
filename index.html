@@ -5,214 +5,319 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Grist Custom Widget</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://unpkg.com/dompurify@3/dist/purify.min.js"></script>
   <link href="fonts/fonts.css" rel="stylesheet">
   <link href="marianne.css" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; background: #fff; padding: 24px; color: #37352f; display: flex; justify-content: center; }
-    .container { width: 500px; }
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 2000; }
-    .modal.show { display: flex; justify-content: center; align-items: center; }
-    .modal-content { width: 600px; max-height: 90vh; display: flex; flex-direction: column; padding: 16px; background: white; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e0e0e0; }
-    .modal-header h2 { font-size: 16px; font-weight: 600; }
-    .preview-btn { padding: 8px 16px; background: #2383e2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; }
-    .preview-btn:hover { background: #1a6bb8; }
-    .global-settings { display: flex; gap: 16px; padding: 12px; background: #f5f5f5; border-radius: 4px; margin-bottom: 16px; }
-    .setting-group { display: flex; align-items: center; gap: 8px; }
-    .setting-group label { font-size: 13px; color: #666; }
-    .setting-select { padding: 6px 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 13px; background: white; cursor: pointer; }
-    .modal-body { flex: 1; overflow-y: auto; margin-bottom: 16px; padding-right: 8px; padding-top: 20px; }
-    .element-item { padding: 8px 10px 8px 36px; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 6px; background: #f9f9f9; display: flex; align-items: flex-start; gap: 10px; position: relative; transition: background-color 0.2s; }
-    .element-item.dragging { opacity: 0.5; }
-    .element-item.drag-over-top { border-top: 2px solid #2383e2; }
-    .element-item.drag-over-bottom { border-bottom: 2px solid #2383e2; }
-    .drag-handle { cursor: grab; color: #999; font-size: 18px; user-select: none; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); }
-    .drag-handle:active { cursor: grabbing; }
-    .element-content-wrapper { flex: 1; min-width: 0; }
-    .element-preview { font-size: 14px; color: #37352f; margin-bottom: 4px; }
-    .element-preview.separator { height: 1px; background: #e0e0e0; margin: 4px 0; }
-    .element-preview.title { font-size: 16px; font-weight: 600; color: #37352f; white-space: pre-wrap; line-height: 1.2; }
-    .element-preview.text { font-size: 14px; color: #37352f; white-space: pre-wrap; }
-    .element-preview.field { font-size: 11px; color: #666; margin-top: 4px; margin-bottom: 0; margin-left: 8px; }
-    .field-label-wrapper { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
-    .field-label-text { font-size: 13px; font-weight: 500; color: #37352f; }
-    .element-controls { display: flex; gap: 6px; flex-shrink: 0; align-items: flex-start; padding-top: 6px; }
-    .element-controls button, .element-controls .icon-btn { background: white; border: 1px solid #e0e0e0; cursor: pointer; font-size: 13px; padding: 4px 7px; border-radius: 4px; transition: all 0.2s; }
-    .element-controls button:hover, .element-controls .icon-btn:not(.active):hover { background: #f0f0f0; }
-    .icon-btn.active { background: #2383e2; color: white; border-color: #2383e2; }
-    .icon-btn { position: relative; }
-    .icon-btn .tooltip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 6px 10px; border-radius: 4px; font-size: 12px; white-space: nowrap; margin-bottom: 4px; z-index: 1000; }
-    .icon-btn .tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 4px solid transparent; border-top-color: #333; }
-    .icon-btn:not(.active):hover .tooltip { display: block; }
-    .icon-btn .icon-star { font-size: 10px; position: relative; top: -2px; }
-    .validation-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 3000; min-width: 300px; }
-    .validation-popup h3 { font-size: 16px; margin-bottom: 12px; color: #37352f; }
-    .validation-popup label { font-size: 14px; color: #37352f; margin-bottom: 8px; display: block; }
-    .validation-popup input { width: 100%; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; margin-bottom: 12px; }
-    .validation-popup-buttons { display: flex; gap: 8px; justify-content: space-between; }
-    .validation-popup-buttons button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-    .validation-popup-buttons .cancel { background: #f0f0f0; color: #37352f; }
-    .validation-popup-buttons .delete { background: #d32f2f; color: white; }
-    .validation-popup-buttons .save { background: #2383e2; color: white; }
-    .popup-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 2999; }
-    .popup-overlay.show { display: block; }
-    .filter-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 3000; min-width: 350px; }
-    .filter-popup h3 { font-size: 16px; margin-bottom: 16px; color: #37352f; }
-    .filter-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
-    .filter-row label { font-size: 14px; color: #37352f; }
-    .filter-row select { flex: 1; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; }
-    .filter-popup-buttons { display: flex; gap: 8px; justify-content: space-between; margin-top: 16px; }
-    .filter-popup-buttons button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-    .filter-popup-buttons .cancel { background: #f0f0f0; color: #37352f; }
-    .filter-popup-buttons .delete { background: #d32f2f; color: white; }
-    .filter-popup-buttons .save { background: #2383e2; color: white; }
-    .edit-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 3000; min-width: 400px; }
-    .edit-popup h3 { font-size: 16px; margin-bottom: 12px; color: #37352f; }
-    .edit-popup input[type="text"] { width: 100%; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; margin-bottom: 12px; }
-    .edit-popup textarea { width: 100%; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; margin-bottom: 12px; min-height: 80px; resize: vertical; font-family: inherit; }
-    .edit-popup-buttons { display: flex; gap: 8px; justify-content: flex-end; }
-    .edit-popup-buttons button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-    .edit-popup-buttons .cancel { background: #f0f0f0; color: #37352f; }
-    .edit-popup-buttons .save { background: #2383e2; color: white; }
-    .edit-popup.rich-editor { min-width: 500px; max-width: 600px; }
-    .editor-toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 4px 4px 0 0; margin-bottom: 0; }
-    .editor-toolbar .toolbar-btn { padding: 6px 10px; background: white; border: 1px solid #e0e0e0; border-radius: 4px; cursor: pointer; font-size: 14px; min-width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; }
-    .editor-toolbar .toolbar-btn:hover { background: #2383e2; color: white; border-color: #2383e2; }
-    .editor-toolbar .toolbar-select { padding: 4px 8px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 13px; height: 32px; cursor: pointer; max-width: 100px; }
-    .editor-toolbar .toolbar-sep { width: 1px; background: #e0e0e0; margin: 0 4px; }
-    .editor-toolbar .color-picker-wrapper { position: relative; }
-    .editor-toolbar .color-icon { font-weight: bold; text-decoration: underline; text-decoration-color: #000; }
-    .editor-toolbar .bg-color-icon { font-weight: bold; background: rgba(255,255,0,0.3); padding: 2px 4px; }
-    .color-picker { display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; margin-top: 4px; }
-    .color-picker.show { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
-    .color-picker .color-btn { width: 24px; height: 24px; border: 1px solid #e0e0e0; border-radius: 3px; cursor: pointer; padding: 0; }
-    .color-picker .color-btn:hover { transform: scale(1.1); border-color: #2383e2; }
-    .emoji-picker { display: none; position: absolute; top: 100%; right: 0; background: white; border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; max-width: 280px; margin-top: 4px; }
-    .emoji-picker.show { display: flex; flex-wrap: wrap; gap: 4px; }
-    .emoji-picker .emoji-btn { width: 32px; height: 32px; border: none; background: transparent; cursor: pointer; font-size: 18px; border-radius: 4px; }
-    .emoji-picker .emoji-btn:hover { background: #f0f0f0; }
-    .rich-editor-content { width: 100%; min-height: 150px; padding: 12px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 4px 4px; font-size: 14px; line-height: 1.5; margin-bottom: 12px; overflow-y: auto; max-height: 300px; }
-    .rich-editor-content:focus { outline: none; border-color: #2383e2; }
-    .rich-editor-content a { color: #2383e2; }
-    .rich-editor-content ul { margin-left: 24px; padding-left: 0; }
-    .custom-title ul, .custom-text ul, label ul { margin-left: 24px; padding-left: 0; }
-    .field-label-text ul { margin-left: 24px; padding-left: 0; }
-    .element-preview ul { margin-left: 24px; padding-left: 0; }
-    .add-section { display: flex; gap: 12px; align-items: flex-start; padding: 12px; background: #f9f9f9; border-radius: 4px; border: 1px solid #e0e0e0; }
-    .add-section-fields { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-    .add-element-btn { padding: 10px 16px; background: #2383e2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; white-space: nowrap; }
-    .add-element-btn:hover { background: #1a6bb8; }
-    .element-input { width: 100%; padding: 8px 12px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; }
-    .field { margin-bottom: 20px; }
-    .field.checkbox-field { display: flex; align-items: center; gap: 12px; }
-    .field.checkbox-field label { margin-bottom: 0; }
-    .field.hidden { display: none; }
-    label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 8px; color: #37352f; }
-    input, select, textarea { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fff; color: #37352f; transition: border-color 0.2s; }
-    textarea { font-family: inherit; resize: vertical; min-height: 100px; }
-    input.error, select.error, textarea.error { border-color: #d32f2f; }
-    .error-message { color: #d32f2f; font-size: 12px; margin-top: 4px; display: none; }
-    .error-message.show { display: block; }
-    .form-error { color: #d32f2f; font-size: 14px; margin-bottom: 12px; padding: 12px; background: #ffebee; border-radius: 4px; display: none; text-align: center; }
-    .form-error.show { display: block; }
-    .form-success { color: #2e7d32; font-size: 14px; margin-bottom: 12px; padding: 12px; background: #e8f5e9; border-radius: 4px; display: none; text-align: center; }
-    .form-success.show { display: block; }
-    .no-columns-message { color: #666; font-size: 14px; margin-bottom: 12px; padding: 12px; background: #f5f5f5; border-radius: 4px; display: none; text-align: center; line-height: 1.5; }
-    .no-columns-message.show { display: block; }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: #2383e2; }
-    input[type="checkbox"] { width: auto; margin: 0; }
-    select[multiple] { min-height: 120px; padding: 8px; }
-    select[multiple] option { padding: 6px 8px; border-radius: 3px; margin: 2px 0; }
-    select[multiple] option:checked { background: #2383e2; color: white; }
-    .btn { background: #2383e2; color: white; border: none; padding: 12px 20px; font-size: 14px; font-weight: 500; border-radius: 4px; cursor: pointer; transition: background 0.2s; margin-top: 10px; width: 100%; }
-    .btn:hover { background: #1a6bb8; }
-    .btn:active { transform: translateY(1px); }
-    .separator { height: 1px; background: #e0e0e0; margin: 32px 0; }
-    .custom-title { font-size: 18px; font-weight: 600; margin: 20px 0 12px 0; color: #37352f; white-space: pre-wrap; line-height: 1.2; }
-    .custom-text { font-size: 14px; color: #37352f; margin: 12px 0 20px 0; line-height: 1.5; white-space: pre-wrap; }
-    .custom-text ul, .custom-title ul, label ul, .field-label-text ul { margin-top: 8px; margin-bottom: 8px; }
-
-    /* Styles pour les pièces jointes */
-    .attachment-input { display: flex; flex-direction: column; gap: 8px; }
-    .attachment-input.error .attachment-btn { border-color: #d32f2f; }
-    .attachment-btn { padding: 10px 16px; background: #f5f5f5; border: 1px dashed #ccc; border-radius: 4px; cursor: pointer; font-size: 14px; color: #666; transition: all 0.2s; }
-    .attachment-btn:hover { background: #e8e8e8; border-color: #999; }
-    .attachment-list { display: flex; flex-direction: column; gap: 6px; }
-    .attachment-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 4px; }
-    .attachment-name { flex: 1; font-size: 13px; color: #37352f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .attachment-size { font-size: 12px; color: #999; flex-shrink: 0; }
-    .attachment-remove { width: 24px; height: 24px; border: none; background: transparent; color: #999; cursor: pointer; font-size: 18px; line-height: 1; border-radius: 4px; flex-shrink: 0; }
-    .attachment-remove:hover { background: #ffebee; color: #d32f2f; }
-  </style>
+  <link href="style.css" rel="stylesheet">
 </head>
 <body>
-  <div class="popup-overlay" id="popupOverlay"></div>
-  
-  <div class="modal" id="configModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Configuration du formulaire</h2>
-        <button class="preview-btn" id="closeModal">Prévisualiser</button>
-      </div>
+  <div id="app">
+    <!-- Overlay pour les popups -->
+    <div class="popup-overlay" :class="{ show: showOverlay }" @click="closeAllPopups"></div>
 
-      <div class="global-settings">
-        <div class="setting-group">
-          <label>Police</label>
-          <select id="fontSelect" class="setting-select">
-            <option value="">Par défaut</option>
-            <option value="'Marianne', sans-serif">Marianne (État)</option>
-            <option value="'Roboto', sans-serif">Roboto</option>
-            <option value="'Lato', sans-serif">Lato</option>
-            <option value="'Montserrat', sans-serif">Montserrat</option>
-            <option value="'Raleway', sans-serif">Raleway</option>
-            <option value="'Oswald', sans-serif">Oswald</option>
-            <option value="'Nunito', sans-serif">Nunito</option>
-            <option value="Arial, sans-serif">Arial</option>
-            <option value="Helvetica, sans-serif">Helvetica</option>
-            <option value="Verdana, sans-serif">Verdana</option>
-            <option value="Georgia, serif">Georgia</option>
-            <option value="'Times New Roman', serif">Times New Roman</option>
-          </select>
+    <!-- Modal de configuration -->
+    <div class="modal" :class="{ show: showConfigModal }">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Configuration du formulaire</h2>
+          <button class="preview-btn" @click="showConfigModal = false">Previsualiser</button>
         </div>
-        <div class="setting-group">
-          <label>Marges</label>
-          <select id="paddingSelect" class="setting-select">
-            <option value="">Par défaut</option>
-            <option value="small">Petites</option>
-            <option value="medium">Moyennes</option>
-            <option value="large">Grandes</option>
-          </select>
-        </div>
-      </div>
 
-      <div class="modal-body">
-        <div id="allElements"></div>
-      </div>
-      
-      <div class="add-section">
-        <div class="add-section-fields">
-          <select id="elementType" class="element-input">
-            <option value="">-- Type d'élément --</option>
-            <option value="column">Colonne de la table</option>
-            <option value="separator">Séparateur</option>
-            <option value="text">Texte libre</option>
-          </select>
-          <select id="columnSelect" class="element-input" style="display: none;"></select>
-          <textarea id="elementContent" class="element-input" rows="3" style="display: none;"></textarea>
+        <!-- Parametres globaux -->
+        <div class="global-settings">
+          <div class="setting-group">
+            <label>Police</label>
+            <select v-model="globalFont" @change="saveConfiguration" class="setting-select">
+              <option value="">Par defaut</option>
+              <option value="'Marianne', sans-serif">Marianne (Etat)</option>
+              <option value="'Roboto', sans-serif">Roboto</option>
+              <option value="'Lato', sans-serif">Lato</option>
+              <option value="'Montserrat', sans-serif">Montserrat</option>
+              <option value="'Raleway', sans-serif">Raleway</option>
+              <option value="'Oswald', sans-serif">Oswald</option>
+              <option value="'Nunito', sans-serif">Nunito</option>
+              <option value="Arial, sans-serif">Arial</option>
+              <option value="Helvetica, sans-serif">Helvetica</option>
+              <option value="Verdana, sans-serif">Verdana</option>
+              <option value="Georgia, serif">Georgia</option>
+              <option value="'Times New Roman', serif">Times New Roman</option>
+            </select>
+          </div>
+          <div class="setting-group">
+            <label>Marges</label>
+            <select v-model="globalPadding" @change="saveConfiguration" class="setting-select">
+              <option value="">Par defaut</option>
+              <option value="small">Petites</option>
+              <option value="medium">Moyennes</option>
+              <option value="large">Grandes</option>
+            </select>
+          </div>
         </div>
-        <button class="add-element-btn" id="addElementBtn">Ajouter</button>
+
+        <!-- Liste des elements du formulaire -->
+        <div class="modal-body">
+          <div
+            v-for="(element, index) in formElements"
+            :key="index"
+            class="element-item"
+            draggable="true"
+            @dragstart="onDragStart(index, $event)"
+            @dragend="onDragEnd"
+            @dragover.prevent="onDragOver(index, $event)"
+            @drop="onDrop(index, $event)"
+            :class="{ 'drag-over-top': dragOverIndex === index && dragPosition === 'top', 'drag-over-bottom': dragOverIndex === index && dragPosition === 'bottom' }"
+          >
+            <div class="drag-handle">&#8942;&#8942;</div>
+            <div class="element-content-wrapper">
+              <!-- Champ de formulaire -->
+              <template v-if="element.type === 'field'">
+                <div class="field-label-wrapper">
+                  <span class="field-label-text" v-html="element.fieldLabel || element.fieldName"></span>
+                </div>
+                <div class="element-preview field">Id colonne : {{ element.fieldName }}</div>
+              </template>
+              <!-- Separateur -->
+              <template v-else-if="element.type === 'separator'">
+                <div class="element-preview separator"></div>
+              </template>
+              <!-- Texte -->
+              <template v-else>
+                <div class="element-preview text" v-html="element.content"></div>
+              </template>
+            </div>
+            <div class="element-controls">
+              <!-- Boutons pour les champs -->
+              <template v-if="element.type === 'field'">
+                <div class="icon-btn" @click="editLabel(index)" title="Modifier le libelle">&#9998;</div>
+                <div class="icon-btn" :class="{ active: element.required }" @click="toggleRequired(index)" title="Obligatoire">&#10022;</div>
+                <div class="icon-btn" :class="{ active: element.conditional }" @click="showFilterPopup(index)" title="Conditionnel">&#9889;</div>
+                <div v-if="isTextOrNumericField(element)" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" title="Critère de validation">&#10003;</div>
+                <div v-if="isPureTextField(element)" class="icon-btn" :class="{ active: element.multiline }" @click="toggleMultiline(index)" title="Multiligne">&#9776;</div>
+              </template>
+              <!-- Bouton edit pour texte -->
+              <template v-if="element.type === 'text'">
+                <div class="icon-btn" @click="editContent(index)" title="Modifier">&#9998;</div>
+              </template>
+              <!-- Bouton supprimer -->
+              <button @click="removeElement(index)">&#128465;</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section ajout d'element -->
+        <div class="add-section">
+          <div class="add-section-fields">
+            <select v-model="newElementType" class="element-input">
+              <option value="">-- Type d'élément --</option>
+              <option value="column">Colonne de la table</option>
+              <option value="separator">Séparateur</option>
+              <option value="text">Texte libre</option>
+            </select>
+            <select v-if="newElementType === 'column'" v-model="selectedColumn" class="element-input">
+              <option value="">-- Sélectionner une colonne --</option>
+              <option v-for="col in availableColumns" :key="col" :value="col">{{ col }}</option>
+            </select>
+            <textarea v-if="newElementType === 'text'" v-model="newElementContent" class="element-input" rows="3" placeholder="Texte"></textarea>
+          </div>
+          <button class="add-element-btn" @click="addElement">Ajouter</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulaire principal -->
+    <div class="container" :style="containerStyle">
+      <template v-for="element in formElements" :key="element.fieldName || element.content">
+        <!-- Séparateur -->
+        <div v-if="element.type === 'separator'" class="separator"></div>
+        <!-- Texte -->
+        <div v-else-if="element.type === 'text'" class="custom-text" v-html="element.content"></div>
+        <!-- Champ -->
+        <div
+          v-else-if="element.type === 'field'"
+          class="field"
+          :class="{ 'checkbox-field': columnMetadata[element.fieldName]?.isBool, hidden: !shouldShowField(element) }"
+        >
+          <template v-if="columnMetadata[element.fieldName]?.isBool">
+            <input type="checkbox" v-model="formData[element.fieldName]">
+            <label v-html="getLabelHtml(element)"></label>
+          </template>
+          <template v-else>
+            <label v-html="getLabelHtml(element)"></label>
+            <!-- Input selon le type de colonne -->
+            <!-- Attachments -->
+            <div v-if="columnMetadata[element.fieldName]?.isAttachment" class="attachment-input">
+              <input
+                type="file"
+                multiple
+                :id="'file_' + element.fieldName"
+                style="display: none"
+                @change="onFileSelect(element.fieldName, $event)"
+              >
+              <button type="button" class="attachment-btn" @click="triggerFileInput(element.fieldName)">Charger une PJ</button>
+              <div class="attachment-list">
+                <div v-for="(file, idx) in pendingAttachments[element.fieldName]" :key="idx" class="attachment-item">
+                  <span class="attachment-name">{{ file.name }}</span>
+                  <span class="attachment-size">{{ formatFileSize(file.size) }}</span>
+                  <button type="button" class="attachment-remove" @click="removeAttachment(element.fieldName, idx)">×</button>
+                </div>
+              </div>
+            </div>
+            <!-- Date -->
+            <input
+              v-else-if="columnMetadata[element.fieldName]?.isDate"
+              type="date"
+              v-model="formData[element.fieldName]"
+            >
+            <!-- Select multiple (ChoiceList, RefList) -->
+            <select
+              v-else-if="columnMetadata[element.fieldName]?.isMultiple"
+              multiple
+              v-model="formData[element.fieldName]"
+            >
+              <option
+                v-for="opt in getSelectOptions(element)"
+                :key="opt.id"
+                :value="opt.id"
+              >{{ opt.label }}</option>
+            </select>
+            <!-- Select simple (Choice, Ref) -->
+            <select
+              v-else-if="hasSelectOptions(element)"
+              v-model="formData[element.fieldName]"
+            >
+              <option value="">-- Sélectionner --</option>
+              <option
+                v-for="opt in getSelectOptions(element)"
+                :key="opt.id"
+                :value="opt.id"
+              >{{ opt.label }}</option>
+            </select>
+            <!-- Textarea (multiline) -->
+            <textarea
+              v-else-if="element.multiline"
+              v-model="formData[element.fieldName]"
+              rows="4"
+            ></textarea>
+            <!-- Input texte/numerique par defaut -->
+            <input
+              v-else
+              type="text"
+              v-model="formData[element.fieldName]"
+            >
+          </template>
+          <div v-if="errors[element.fieldName]" class="error-message show">{{ errors[element.fieldName] }}</div>
+        </div>
+      </template>
+
+      <div v-if="formErrorMessage" class="form-error show">{{ formErrorMessage }}</div>
+      <div v-if="formSuccessMessage" class="form-success show">{{ formSuccessMessage }}</div>
+      <button class="btn" @click="submitForm">Valider</button>
+    </div>
+
+    <!-- Popup d'edition de texte riche -->
+    <div v-if="editPopup.show" class="edit-popup rich-editor" @click="closePickersOnClickOutside($event)">
+      <h3>{{ editPopup.title }}</h3>
+      <div class="editor-toolbar">
+        <button type="button" class="toolbar-btn" :class="{ active: activeFormats.bold }" @click="execCmd('bold')" title="Gras (Ctrl+B)"><strong>B</strong></button>
+        <button type="button" class="toolbar-btn" :class="{ active: activeFormats.italic }" @click="execCmd('italic')" title="Italique (Ctrl+I)"><em>I</em></button>
+        <button type="button" class="toolbar-btn" :class="{ active: activeFormats.underline }" @click="execCmd('underline')" title="Souligne (Ctrl+U)"><u>U</u></button>
+        <span class="toolbar-sep"></span>
+        <button type="button" class="toolbar-btn" @click="execCmd('insertUnorderedList')" title="Liste a puces">•</button>
+        <button type="button" class="toolbar-btn" @click="insertLink" title="Lien">🔗</button>
+        <div class="color-picker-wrapper">
+          <button type="button" class="toolbar-btn" @click.stop="toggleEmojiPicker" title="Emoji">😀</button>
+          <div class="emoji-picker" :class="{ show: emojiPicker.show }">
+            <button v-for="emoji in emojis" :key="emoji" type="button" class="emoji-btn" @click="insertEmoji(emoji)">{{ emoji }}</button>
+          </div>
+        </div>
+        <span class="toolbar-sep"></span>
+        <select class="toolbar-select" @change="applyFormat($event)" title="Style">
+          <option value="">Style</option>
+          <option value="h1">Titre 1</option>
+          <option value="h2">Titre 2</option>
+          <option value="h3">Titre 3</option>
+          <option value="p">Paragraphe</option>
+        </select>
+        <span class="toolbar-sep"></span>
+        <div class="color-picker-wrapper">
+          <button type="button" class="toolbar-btn" @click.stop="toggleColorPicker('text')" title="Couleur du texte"><span class="color-icon">A</span></button>
+          <div class="color-picker" :class="{ show: colorPicker.show && colorPicker.type === 'text' }">
+            <button type="button" class="color-btn no-color" @click="removeColor('foreColor')" title="Aucune couleur"></button>
+            <button v-for="color in editorColors" :key="color" type="button" class="color-btn" :style="{ background: color }" @click="applyColor('foreColor', color)"></button>
+          </div>
+        </div>
+        <div class="color-picker-wrapper">
+          <button type="button" class="toolbar-btn" @click.stop="toggleColorPicker('bg')" title="Couleur de fond"><span class="bg-color-icon">A</span></button>
+          <div class="color-picker" :class="{ show: colorPicker.show && colorPicker.type === 'bg' }">
+            <button type="button" class="color-btn no-color" @click="removeColor('backColor')" title="Aucune couleur"></button>
+            <button v-for="color in editorColors" :key="'bg-'+color" type="button" class="color-btn" :style="{ background: color }" @click="applyColor('backColor', color)"></button>
+          </div>
+        </div>
+      </div>
+      <div
+        ref="richEditor"
+        class="rich-editor-content"
+        contenteditable="true"
+        @keydown="onEditorKeydown"
+        @keyup="onEditorSelect"
+        @mouseup="onEditorSelect"
+        v-html="editPopup.value"
+      ></div>
+      <div class="edit-popup-buttons">
+        <button class="cancel" @click="closeEditPopup">Annuler</button>
+        <button class="save" @click="saveRichEdit">Enregistrer</button>
+      </div>
+    </div>
+
+    <!-- Popup de condition -->
+    <div v-if="filterPopup.show" class="filter-popup">
+      <h3>Affichage conditionnel</h3>
+      <div class="filter-row">
+        <label>Ce champ est affiché si :</label>
+      </div>
+      <div class="filter-row">
+        <select v-model="filterPopup.field" @change="updateFilterValues">
+          <option value="">-- Sélectionner un champ --</option>
+          <option v-for="f in conditionalFields" :key="f.fieldName" :value="f.fieldName">{{ f.fieldName }}</option>
+        </select>
+      </div>
+      <div class="filter-row">
+        <select v-model="filterPopup.operator">
+          <option value="equals">est égal à</option>
+          <option value="notEquals">n'est pas égal à</option>
+        </select>
+      </div>
+      <div class="filter-row">
+        <select v-model="filterPopup.value">
+          <option value="">-- Sélectionner une valeur --</option>
+          <option v-for="v in filterPopup.values" :key="v.id" :value="v.id">{{ v.label }}</option>
+        </select>
+      </div>
+      <div class="filter-popup-buttons">
+        <button v-if="filterPopup.hasExisting" class="delete" @click="deleteFilter">Supprimer</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="cancel" @click="filterPopup.show = false; showOverlay = false">Annuler</button>
+          <button class="save" @click="saveFilter">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popup de validation (maxLength) -->
+    <div v-if="validationPopup.show" class="validation-popup">
+      <h3>Validation du champ</h3>
+      <label>Nombre max de caractères :</label>
+      <input type="number" v-model="validationPopup.maxLength" min="1">
+      <div class="validation-popup-buttons">
+        <button v-if="validationPopup.hasExisting" class="delete" @click="deleteValidation">Supprimer</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="cancel" @click="validationPopup.show = false; showOverlay = false">Annuler</button>
+          <button class="save" @click="saveValidation">Enregistrer</button>
+        </div>
       </div>
     </div>
   </div>
-  
-  <div class="container">
-    <div id="fields"></div>
-    <div class="form-error" id="formError"></div>
-    <div class="form-success" id="formSuccess">Votre réponse a bien été enregistrée</div>
-    <button class="btn" id="addBtn">Valider</button>
-  </div>
-  
-  <script src="script.js"></script>
+
+  <script src="app.js"></script>
 </body>
 </html>
