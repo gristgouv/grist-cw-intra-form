@@ -431,12 +431,12 @@ const app = createApp({
             const meta = columnMetadata.value[el.fieldName];
 
             // multiline: only valid for pure text fields
-            if (el.multiline && !isPureTextFieldByMeta(meta)) {
+            if (el.multiline && meta && !isPureTextFieldByMeta(meta)) {
               delete el.multiline;
             }
 
             // maxLength: only valid for text/numeric/int fields
-            if (el.maxLength != null && !isTextOrNumericFieldByMeta(meta)) {
+            if (el.maxLength != null && meta && !isTextOrNumericFieldByMeta(meta)) {
               delete el.maxLength;
             }
 
