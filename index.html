@@ -163,6 +163,12 @@
                 </div>
               </div>
             </div>
+            <!-- DateTime -->
+            <input
+              v-else-if="columnMetadata[element.fieldName]?.isDateTime"
+              type="datetime-local"
+              v-model="formData[element.fieldName]"
+            >
             <!-- Date -->
             <input
               v-else-if="columnMetadata[element.fieldName]?.isDate"

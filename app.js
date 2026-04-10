@@ -189,6 +189,7 @@ const app = createApp({
     // Emoji list
     const emojis = ['😀', '😊', '👍', '❤️', '⭐', '🎉', '✅', '❌', '⚠️', '💡', '📌', '🔥', '💪', '🙏', '👏', '🤝'];
 
+
     // -------------------------------------------------------------------------
     // COMPUTED PROPERTIES
     // -------------------------------------------------------------------------
@@ -374,7 +375,8 @@ const app = createApp({
             refTable,                   // Target table name for Ref/RefList
             refChoices,                 // [{id, label}] for Ref/RefList dropdowns
             isBool: type === 'Bool',
-            isDate: type === 'Date' || type === 'DateTime',
+            isDate: type === 'Date',
+            isDateTime: type.startsWith('DateTime:'),
             isNumeric: type === 'Numeric',
             isInt: type === 'Int',
             isFormula: colsInfo.isFormula?.[i] === true && colsInfo.formula?.[i]?.length > 0,
@@ -879,7 +881,7 @@ const app = createApp({
     // Check if metadata indicates a text or numeric field (can have maxLength validation)
     function isTextOrNumericFieldByMeta(meta) {
       if (!meta) return false;
-      return !meta.isBool && !meta.isDate && !meta.isMultiple && !meta.isAttachment &&
+      return !meta.isBool && !meta.isDate && !meta.isDateTime && !meta.isMultiple && !meta.isAttachment &&
         (!meta.choices || meta.choices.length === 0) &&
         (!meta.isRef || meta.refChoices.length === 0);
     }
@@ -990,6 +992,7 @@ const app = createApp({
       }
       return html;
     }
+
 
     // Check if a field should display a select dropdown (Choice or Ref)
     function hasSelectOptions(element) {
@@ -1125,6 +1128,9 @@ const app = createApp({
         // Numeric: parse float, accepting comma as decimal separator
         } else if (meta?.isNumeric || meta?.isInt) {
           fields[col] = value ? parseFloat(value.toString().replace(',', '.')) : null;
+        // Date/DateTime: convert to timestamp in seconds
+        } else if (meta?.isDate || meta?.isDateTime) {
+          fields[col] = value ? Math.floor(new Date(value).getTime() / 1000) : null;
         // Default (text): return sanitized string
         } else {
           fields[col] = value?.toString().trim() || null;
