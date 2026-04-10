@@ -431,12 +431,12 @@ const app = createApp({
             const meta = columnMetadata.value[el.fieldName];
 
             // multiline: only valid for pure text fields
-            if (el.multiline && !isPureTextFieldByMeta(meta)) {
+            if (el.multiline && meta && !isPureTextFieldByMeta(meta)) {
               delete el.multiline;
             }
 
             // maxLength: only valid for text/numeric/int fields
-            if (el.maxLength != null && !isTextOrNumericFieldByMeta(meta)) {
+            if (el.maxLength != null && meta && !isTextOrNumericFieldByMeta(meta)) {
               delete el.maxLength;
             }
 
@@ -730,7 +730,8 @@ const app = createApp({
       if (command === 'foreColor') {
         document.execCommand('foreColor', false, '#000000');
       } else {
-        document.execCommand('backColor', false, 'transparent');
+        // Use white instead of transparent - transparent doesn't work well with partial selections
+        document.execCommand('backColor', false, '#FFFFFF');
       }
       colorPicker.show = false;
       richEditor.value?.focus();
