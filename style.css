@@ -503,6 +503,20 @@ select[multiple] option:checked {
   text-align: center;
 }
 
+.filter-too-many {
+  font-size: 13px;
+  color: #d32f2f;
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.dropdown-loading {
+  padding: 12px;
+  color: #999;
+  font-size: 14px;
+  text-align: center;
+}
+
 .more-results {
   padding: 8px 12px;
   font-size: 12px;
