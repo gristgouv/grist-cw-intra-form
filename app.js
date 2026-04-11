@@ -1051,13 +1051,23 @@ const app = createApp({
       return opt ? opt.label : value;
     }
 
+    // Max options displayed in a dropdown (avoid rendering 45k DOM nodes)
+    const MAX_DISPLAYED_OPTIONS = 100;
+
     // Get filtered options based on search query
-    // Filters on option label (case-insensitive)
+    // Results are capped at MAX_DISPLAYED_OPTIONS to avoid DOM performance issues
     function getFilteredOptions(element) {
-      const options = getSelectOptions(element);
+      let options = getSelectOptions(element);
       const query = (searchQuery[element.fieldName] || '').toLowerCase();
-      if (!query) return options;
-      return options.filter(o => o.label.toLowerCase().includes(query));
+      if (query) {
+        options = options.filter(o => o.label.toLowerCase().includes(query));
+      }
+      return options.slice(0, MAX_DISPLAYED_OPTIONS);
+    }
+
+    // Check if there are more options than what's displayed
+    function hasMoreOptions(element) {
+      return getSelectOptions(element).length > MAX_DISPLAYED_OPTIONS;
     }
 
     // Check if option is selected
@@ -1346,6 +1356,7 @@ const app = createApp({
       toggleDropdown,
       getOptionLabel,
       getFilteredOptions,
+      hasMoreOptions,
       isOptionSelected,
       selectOption,
       removeSelection,

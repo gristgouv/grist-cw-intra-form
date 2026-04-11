@@ -216,6 +216,9 @@
                   <div v-if="getFilteredOptions(element).length === 0" class="no-results">
                     Aucun résultat
                   </div>
+                  <div v-if="hasMoreOptions(element)" class="more-results">
+                    Affinez votre recherche pour voir plus de résultats
+                  </div>
                 </div>
               </div>
             </div>
