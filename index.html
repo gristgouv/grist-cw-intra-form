@@ -169,30 +169,66 @@
               type="date"
               v-model="formData[element.fieldName]"
             >
-            <!-- Select multiple (ChoiceList, RefList) -->
-            <select
-              v-else-if="columnMetadata[element.fieldName]?.isMultiple"
-              multiple
-              v-model="formData[element.fieldName]"
-            >
-              <option
-                v-for="opt in getSelectOptions(element)"
-                :key="opt.id"
-                :value="opt.id"
-              >{{ opt.label }}</option>
-            </select>
-            <!-- Select simple (Choice, Ref) -->
-            <select
+            <!-- Custom select (Choice, ChoiceList, Ref, RefList) -->
+            <div
               v-else-if="hasSelectOptions(element)"
-              v-model="formData[element.fieldName]"
+              class="custom-select"
+              :class="{ open: openDropdown === element.fieldName }"
             >
-              <option value="">-- Sélectionner --</option>
-              <option
-                v-for="opt in getSelectOptions(element)"
-                :key="opt.id"
-                :value="opt.id"
-              >{{ opt.label }}</option>
-            </select>
+              <!-- Chips above the select (for multiple) -->
+              <div class="chips-container" v-if="columnMetadata[element.fieldName]?.isMultiple && formData[element.fieldName]?.length">
+                <span
+                  v-for="val in formData[element.fieldName]"
+                  :key="val"
+                  class="chip"
+                >
+                  {{ getOptionLabel(element, val) }}
+                  <span class="chip-remove" @click.stop="removeSelection(element.fieldName, val)">×</span>
+                </span>
+              </div>
+              <div class="custom-select-display" @click="toggleDropdown(element.fieldName)">
+                <!-- Placeholder for multiple -->
+                <span v-if="columnMetadata[element.fieldName]?.isMultiple" class="placeholder">Choisir</span>
+                <!-- Single selection display -->
+                <span v-else class="single-value">
+                  {{ formData[element.fieldName] ? getOptionLabel(element, formData[element.fieldName]) : '-- Sélectionner --' }}
+                </span>
+                <span class="dropdown-arrow">▼</span>
+              </div>
+              <div class="custom-select-dropdown" v-if="openDropdown === element.fieldName">
+                <!-- Loading state while fetching ref data -->
+                <div v-if="loadingDropdown === element.fieldName" class="dropdown-loading">
+                  Chargement...
+                </div>
+                <!-- Normal dropdown content -->
+                <template v-else>
+                  <input
+                    type="text"
+                    class="search-input"
+                    placeholder="Rechercher..."
+                    v-model="searchQuery[element.fieldName]"
+                    @click.stop
+                  >
+                  <div class="options-list">
+                    <div
+                      v-for="opt in getFilteredOptions(element)"
+                      :key="opt.id"
+                      class="option"
+                      :class="{ selected: isOptionSelected(element.fieldName, opt.id) }"
+                      @click.stop="selectOption(element, opt.id)"
+                    >
+                      {{ opt.label }}
+                    </div>
+                    <div v-if="getFilteredOptions(element).length === 0" class="no-results">
+                      Aucun résultat
+                    </div>
+                    <div v-if="hasMoreOptions(element)" class="more-results">
+                      Affinez votre recherche pour voir plus de résultats
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
             <!-- Textarea (multiline) -->
             <textarea
               v-else-if="element.multiline"
@@ -288,7 +324,10 @@
           <option value="notEquals">n'est pas égal à</option>
         </select>
       </div>
-      <div class="filter-row">
+      <div class="filter-row" v-if="filterPopup.tooManyValues">
+        <div class="filter-too-many">Cette colonne contient trop de valeurs pour être utilisée comme condition.</div>
+      </div>
+      <div class="filter-row" v-else>
         <select v-model="filterPopup.value">
           <option value="">-- Sélectionner une valeur --</option>
           <option v-for="v in filterPopup.values" :key="v.id" :value="v.id">{{ v.label }}</option>
