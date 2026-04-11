@@ -179,6 +179,18 @@ const app = createApp({
       hasExisting: false
     });
 
+    // "Ref dropdown filter popup" (filter Ref/RefList options based on another Ref field) state
+    const refDropdownFilterPopup = reactive({
+      show: false,
+      index: null,
+      filterByField: '',
+      eligibleFields: [],
+      linkCol: null,
+      linkColIsMultiple: false,
+      rule: '',
+      hasExisting: false
+    });
+
     // Rich editor state
     const richEditor = ref(null);
     const colorPicker = reactive({ show: false, type: '' });
@@ -449,6 +461,14 @@ const app = createApp({
                 delete el.conditional;
               }
             }
+
+            // refDropdownFilter: verify that the filter-by field still exists and is Ref/RefList
+            if (el.refDropdownFilter) {
+              const filterMeta = columnMetadata.value[el.refDropdownFilter.filterByField];
+              if (!filterMeta?.isRef) {
+                delete el.refDropdownFilter;
+              }
+            }
           }
 
           return el;
@@ -608,6 +628,7 @@ const app = createApp({
       editPopup.show = false;
       filterPopup.show = false;
       validationPopup.show = false;
+      refDropdownFilterPopup.show = false;
     }
 
     // Show edit popup for field label
@@ -953,6 +974,164 @@ const app = createApp({
     }
 
     // -------------------------------------------------------------------------
+    // DROPDOWN FILTER (filter Ref/RefList options based on another Ref field)
+    // -------------------------------------------------------------------------
+    // Running example used throughout this section:
+    //   Current table: "Inscriptions" with columns:
+    //     - Departement (Ref:Departements)
+    //     - Commune (Ref:Communes)
+    //   Table "Communes" has column "Departement" (Ref:Departements) ← the "link column"
+    //
+    //   Goal: when filling the form, filter the Commune dropdown to only show
+    //   communes belonging to the selected Departement.
+    //   Generated rule: choice.Departement == $Departement
+
+    // Check if a form element is a Ref or RefList column
+    function isRefField(element) {
+      if (element.type !== 'field') return false;
+      return !!columnMetadata.value[element.fieldName]?.isRef;
+    }
+
+    // Open the ref filter popup for a given form element.
+    // Fetches _grist_Tables_column on demand (only when user clicks the icon).
+    // Example: user clicks filter icon on the "Commune" field (Ref:Communes)
+    async function showRefDropdownFilterPopup(index) {
+      const element = formElements.value[index];
+      const meta = columnMetadata.value[element.fieldName];
+      if (!meta?.isRef || !meta.refTable) return;
+
+      refDropdownFilterPopup.index = index;
+      refDropdownFilterPopup.hasExisting = !!element.refDropdownFilter;
+
+      // Fetch all columns metadata to inspect the referenced table's structure
+      const colsInfo = await grist.docApi.fetchTable('_grist_Tables_column');
+      const tablesInfo = await grist.docApi.fetchTable('_grist_Tables');
+
+      // Find Ref/RefList columns in the referenced table.
+      // Example: in table "Communes", find columns like "Departement" (Ref:Departements)
+      const currentRefTable = meta.refTable;
+      const currentRefTableNumericId = tablesInfo.id[tablesInfo.tableId.indexOf(currentRefTable)];
+      const refTableCols = [];
+      for (let i = 0; i < colsInfo.colId.length; i++) {
+        if (colsInfo.parentId[i] !== currentRefTableNumericId) continue;
+        const colType = colsInfo.type[i];
+        if (colType.startsWith('Ref:') || colType.startsWith('RefList:')) {
+          refTableCols.push({ colId: colsInfo.colId[i], type: colType });
+        }
+      }
+
+      // Find eligible form fields: other Ref/RefList fields whose referenced table
+      // is pointed to by a column in the current column's referenced table.
+      // Example: "Departement" (Ref:Departements) is eligible because table "Communes"
+      // has a column pointing to "Departements"
+      const eligible = [];
+      for (const el of formElements.value) {
+        if (el.type !== 'field' || el.fieldName === element.fieldName) continue;
+        const elMeta = columnMetadata.value[el.fieldName];
+        if (!elMeta?.isRef || !elMeta.refTable) continue;
+
+        const hasLink = refTableCols.some(col => {
+          const target = col.type.startsWith('Ref:') ? col.type.substring(4) : col.type.substring(8);
+          return target === elMeta.refTable;
+        });
+        if (hasLink) {
+          eligible.push({ fieldName: el.fieldName, label: el.fieldLabel || el.fieldName });
+        }
+      }
+
+      refDropdownFilterPopup.eligibleFields = eligible;
+      // Store refTableCols for use in onRefDropdownFilterFieldChange
+      refDropdownFilterPopup._refTableCols = refTableCols;
+
+      // Pre-fill if already configured
+      if (element.refDropdownFilter) {
+        refDropdownFilterPopup.filterByField = element.refDropdownFilter.filterByField;
+        onRefDropdownFilterFieldChange();
+      } else {
+        refDropdownFilterPopup.filterByField = '';
+        refDropdownFilterPopup.linkCol = null;
+        refDropdownFilterPopup.rule = '';
+      }
+
+      refDropdownFilterPopup.show = true;
+      showOverlay.value = true;
+    }
+
+    // Called when user selects a filter-by field in the ref filter popup.
+    // Auto-detects the link column in the referenced table and builds the display rule.
+    // Example: user picks "Departement" → we find "Departement" (Ref:Departements)
+    // in table "Communes" → rule: choice.Departement == $Departement
+    function onRefDropdownFilterFieldChange() {
+      const filterByField = refDropdownFilterPopup.filterByField;
+      if (!filterByField) {
+        refDropdownFilterPopup.linkCol = null;
+        refDropdownFilterPopup.rule = '';
+        return;
+      }
+
+      const filterMeta = columnMetadata.value[filterByField];
+      const refTableCols = refDropdownFilterPopup._refTableCols || [];
+
+      // Find the column in the referenced table that points to the filter field's table.
+      // Example: in "Communes", find the column whose type is Ref:Departements
+      const linkCol = refTableCols.find(col => {
+        const target = col.type.startsWith('Ref:') ? col.type.substring(4) : col.type.substring(8);
+        return target === filterMeta.refTable;
+      });
+
+      if (!linkCol) {
+        refDropdownFilterPopup.linkCol = null;
+        refDropdownFilterPopup.rule = '';
+        return;
+      }
+
+      refDropdownFilterPopup.linkCol = linkCol;
+      const linkColIsMultiple = linkCol.type.startsWith('RefList:');
+      refDropdownFilterPopup.linkColIsMultiple = linkColIsMultiple;
+      const filterIsMultiple = filterMeta.isMultiple;
+
+      // Build display rule based on column types:
+      // - Ref vs Ref       → choice.Departement == $Departement
+      // - Ref vs RefList    → choice.Departement in $Departements
+      // - RefList vs Ref    → $Departement in choice.Departements
+      // - RefList vs RefList → choice.Departements ∩ $Departements
+      if (linkColIsMultiple && !filterIsMultiple) {
+        refDropdownFilterPopup.rule = `$${filterByField} in choice.${linkCol.colId}`;
+      } else if (!linkColIsMultiple && filterIsMultiple) {
+        refDropdownFilterPopup.rule = `choice.${linkCol.colId} in $${filterByField}`;
+      } else if (!linkColIsMultiple && !filterIsMultiple) {
+        refDropdownFilterPopup.rule = `choice.${linkCol.colId} == $${filterByField}`;
+      } else {
+        refDropdownFilterPopup.rule = `choice.${linkCol.colId} ∩ $${filterByField}`;
+      }
+    }
+
+    // Save the ref filter configuration to the form element
+    async function saveRefDropdownFilter() {
+      if (refDropdownFilterPopup.filterByField && refDropdownFilterPopup.linkCol) {
+        formElements.value[refDropdownFilterPopup.index].refDropdownFilter = {
+          filterByField: refDropdownFilterPopup.filterByField,
+          refTableLinkCol: refDropdownFilterPopup.linkCol.colId,
+          linkColIsMultiple: refDropdownFilterPopup.linkColIsMultiple,
+          rule: refDropdownFilterPopup.rule
+        };
+      } else {
+        formElements.value[refDropdownFilterPopup.index].refDropdownFilter = null;
+      }
+      await saveConfiguration();
+      refDropdownFilterPopup.show = false;
+      showOverlay.value = false;
+    }
+
+    // Remove the ref filter from this field
+    async function deleteRefDropdownFilter() {
+      formElements.value[refDropdownFilterPopup.index].refDropdownFilter = null;
+      await saveConfiguration();
+      refDropdownFilterPopup.show = false;
+      showOverlay.value = false;
+    }
+
+    // -------------------------------------------------------------------------
     // CONDITIONAL FIELD DISPLAY (only available for column types Choice and Ref)
     // -------------------------------------------------------------------------
 
@@ -1045,6 +1224,7 @@ const app = createApp({
           id,
           label: displayColId && refData[displayColId] ? refData[displayColId][idx] : id
         }));
+        meta.rawRefData = refData;
         meta.refDataLoaded = true;
       } catch (e) {
         errors[colId] = 'Erreur lors du chargement des données';
@@ -1079,14 +1259,63 @@ const app = createApp({
     // Max options displayed in a dropdown (avoid rendering 45k DOM nodes)
     const MAX_DISPLAYED_OPTIONS = 100;
 
-    // Get filtered options based on search query
-    // Results are capped at MAX_DISPLAYED_OPTIONS to avoid DOM performance issues
+    // Get filtered options based on search query and optional ref dropdown filter.
+    // Results are capped at MAX_DISPLAYED_OPTIONS to avoid DOM performance issues.
+    // The ref dropdown filter block only runs if element.refDropdownFilter is configured.
     function getFilteredOptions(element) {
       let options = getSelectOptions(element);
-      const query = (searchQuery[element.fieldName] || '').toLowerCase();
-      if (query) {
-        options = options.filter(o => o.label.toLowerCase().includes(query));
+      const searchBarQuery = (searchQuery[element.fieldName] || '').toLowerCase();
+      if (searchBarQuery) {
+        options = options.filter(o => o.label.toLowerCase().includes(searchBarQuery));
       }
+
+      // Apply ref dropdown filter only if configured
+      const refDropdownFilter = element.refDropdownFilter;
+      if (refDropdownFilter) {
+        const meta = columnMetadata.value[element.fieldName];
+        const filterValue = formData[refDropdownFilter.filterByField];
+
+        if (filterValue && !(Array.isArray(filterValue) && filterValue.length === 0)) {
+          const rawRefData = meta.rawRefData;
+          if (rawRefData) {
+            const linkCol = refDropdownFilter.refTableLinkCol;
+            const linkColIsMultiple = refDropdownFilter.linkColIsMultiple;
+            const filterIsMultiple = Array.isArray(filterValue);
+
+            // Example: Commune (Ref:Communes) filtered by Departement (Ref:Departements)
+            // For each commune option, check if its Departement matches the selected one
+            options = options.filter(opt => {
+              const refIdx = rawRefData.id.indexOf(opt.id);
+              if (refIdx === -1) return true;
+
+              const linkValue = rawRefData[linkCol]?.[refIdx];
+
+              if (linkColIsMultiple && !filterIsMultiple) {
+                // $Departement in choice.Departements (RefList)
+                if (Array.isArray(linkValue) && linkValue[0] === 'L') {
+                  return linkValue.slice(1).includes(parseInt(filterValue));
+                }
+                return false;
+              } else if (!linkColIsMultiple && filterIsMultiple) {
+                // choice.Departement in $Departements
+                return filterValue.map(v => parseInt(v)).includes(parseInt(linkValue));
+              } else if (!linkColIsMultiple && !filterIsMultiple) {
+                // choice.Departement == $Departement
+                return parseInt(linkValue) === parseInt(filterValue);
+              } else {
+                // Both RefList: intersection
+                if (Array.isArray(linkValue) && linkValue[0] === 'L') {
+                  const linkIds = linkValue.slice(1).map(v => parseInt(v));
+                  const filterIds = filterValue.map(v => parseInt(v));
+                  return linkIds.some(id => filterIds.includes(id));
+                }
+                return false;
+              }
+            });
+          }
+        }
+      }
+
       return options.slice(0, MAX_DISPLAYED_OPTIONS);
     }
 
@@ -1319,6 +1548,7 @@ const app = createApp({
       dragPosition,
       editPopup,
       filterPopup,
+      refDropdownFilterPopup,
       validationPopup,
       richEditor,
       colorPicker,
@@ -1369,6 +1599,11 @@ const app = createApp({
       updateFilterValues,
       saveFilter,
       deleteFilter,
+      showRefDropdownFilterPopup,
+      onRefDropdownFilterFieldChange,
+      saveRefDropdownFilter,
+      deleteRefDropdownFilter,
+      isRefField,
       isTextOrNumericField,
       isPureTextField,
       showValidationPopup,

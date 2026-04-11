@@ -92,6 +92,7 @@
                 <div class="icon-btn" @click="editLabel(index)" title="Modifier le libelle">&#9998;</div>
                 <div class="icon-btn" :class="{ active: element.required }" @click="toggleRequired(index)" title="Obligatoire">&#10022;</div>
                 <div class="icon-btn" :class="{ active: element.conditional }" @click="showFilterPopup(index)" title="Conditionnel">&#9889;</div>
+                <div v-if="isRefField(element)" class="icon-btn" :class="{ active: element.refDropdownFilter }" @click="showRefDropdownFilterPopup(index)" title="Filtre liste déroulante">&#128279;</div>
                 <div v-if="isTextOrNumericField(element)" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" title="Critère de validation">&#10003;</div>
                 <div v-if="isPureTextField(element)" class="icon-btn" :class="{ active: element.multiline }" @click="toggleMultiline(index)" title="Multiligne">&#9776;</div>
               </template>
@@ -352,6 +353,33 @@
         <div style="display: flex; gap: 8px;">
           <button class="cancel" @click="validationPopup.show = false; showOverlay = false">Annuler</button>
           <button class="save" @click="saveValidation">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popup filtre liste déroulante (Ref/RefList) -->
+    <div v-if="refDropdownFilterPopup.show" class="filter-popup">
+      <h3>Filtre sur liste déroulante</h3>
+      <div class="filter-row">
+        <label>Filtrer cette colonne par rapport à :</label>
+      </div>
+      <div class="filter-row">
+        <select v-model="refDropdownFilterPopup.filterByField" @change="onRefDropdownFilterFieldChange">
+          <option value="">-- Sélectionner un champ --</option>
+          <option v-for="f in refDropdownFilterPopup.eligibleFields" :key="f.fieldName" :value="f.fieldName">{{ f.label }}</option>
+        </select>
+      </div>
+      <div v-if="refDropdownFilterPopup.rule" class="filter-row">
+        <div class="ref-filter-rule">Règle : <code>{{ refDropdownFilterPopup.rule }}</code></div>
+      </div>
+      <div v-if="refDropdownFilterPopup.eligibleFields.length === 0" class="filter-row">
+        <div class="ref-filter-no-fields">Aucun champ de référence compatible dans le formulaire.</div>
+      </div>
+      <div class="filter-popup-buttons">
+        <button v-if="refDropdownFilterPopup.hasExisting" class="delete" @click="deleteRefDropdownFilter">Supprimer</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="cancel" @click="refDropdownFilterPopup.show = false; showOverlay = false">Annuler</button>
+          <button class="save" @click="saveRefDropdownFilter">Enregistrer</button>
         </div>
       </div>
     </div>
