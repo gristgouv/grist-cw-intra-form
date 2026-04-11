@@ -145,6 +145,10 @@ const app = createApp({
     const dragOverIndex = ref(null);      // Index of element being dragged over
     const dragPosition = ref('');         // 'top' or 'bottom' drop position
 
+    // Custom select state
+    const openDropdown = ref(null);       // Currently open dropdown (fieldName)
+    const searchQuery = reactive({});     // Search query per field
+
     // "Edit popup" (used to edit text) state
     const editPopup = reactive({
       show: false,
@@ -257,6 +261,13 @@ const app = createApp({
         getColumnMetadata().then(meta => {
           columnMetadata.value = meta;
         });
+      });
+
+      // Close dropdowns when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.custom-select')) {
+          openDropdown.value = null;
+        }
       });
     });
 
@@ -1018,6 +1029,82 @@ const app = createApp({
     }
 
     // -------------------------------------------------------------------------
+    // CUSTOM SELECT (with search and chips)
+    // -------------------------------------------------------------------------
+
+    // Toggle dropdown open/close
+    function toggleDropdown(fieldName) {
+      if (openDropdown.value === fieldName) {
+        // Already open → close it
+        openDropdown.value = null;
+      } else {
+        // Closed → open it and reset search
+        openDropdown.value = fieldName;
+        searchQuery[fieldName] = '';
+      }
+    }
+
+    // Get label for a selected value
+    function getOptionLabel(element, value) {
+      const options = getSelectOptions(element);
+      const opt = options.find(o => o.id === value);
+      return opt ? opt.label : value;
+    }
+
+    // Get filtered options based on search query
+    // Filters on option label (case-insensitive)
+    function getFilteredOptions(element) {
+      const options = getSelectOptions(element);
+      const query = (searchQuery[element.fieldName] || '').toLowerCase();
+      if (!query) return options;
+      return options.filter(o => o.label.toLowerCase().includes(query));
+    }
+
+    // Check if option is selected
+    function isOptionSelected(fieldName, optionId) {
+      const meta = columnMetadata.value[fieldName];
+      if (meta?.isMultiple) {
+        return (formData[fieldName] || []).includes(optionId);
+      }
+      return formData[fieldName] === optionId;
+    }
+
+    // Select an option (handles both single and multiple)
+    function selectOption(element, optionId) {
+      const fieldName = element.fieldName;
+      const meta = columnMetadata.value[fieldName];
+
+      if (meta?.isMultiple) {
+        // Multiple: toggle selection
+        const current = formData[fieldName] || [];
+        const index = current.indexOf(optionId);
+        if (index > -1) {
+          // Already selected → remove it
+          current.splice(index, 1);
+        } else {
+          // Not selected → add it
+          current.push(optionId);
+        }
+        formData[fieldName] = [...current];
+      } else {
+        // Single: select and close
+        formData[fieldName] = optionId;
+        openDropdown.value = null;
+      }
+    }
+
+    // Remove a selection from chips (for multiple)
+    function removeSelection(fieldName, value) {
+      const current = formData[fieldName] || [];
+      const index = current.indexOf(value);
+      if (index > -1) {
+        // Found in array → remove it
+        current.splice(index, 1);
+        formData[fieldName] = [...current];
+      }
+    }
+
+    // -------------------------------------------------------------------------
     // FORM VALIDATION
     // -------------------------------------------------------------------------
 
@@ -1204,6 +1291,8 @@ const app = createApp({
       editorColors,
       emojis,
       activeFormats,
+      openDropdown,
+      searchQuery,
 
       // Computed
       containerStyle,
@@ -1254,6 +1343,12 @@ const app = createApp({
       getLabelHtml,
       hasSelectOptions,
       getSelectOptions,
+      toggleDropdown,
+      getOptionLabel,
+      getFilteredOptions,
+      isOptionSelected,
+      selectOption,
+      removeSelection,
       submitForm
     };
   }
