@@ -1159,11 +1159,11 @@ const app = createApp({
         formElements.value.forEach(el => {
           if (el.type === 'field') {
             const meta = columnMetadata.value[el.fieldName];
-            
+
             if (meta?.isAttachment) {
               pendingAttachments[el.fieldName] = [];
             } else {
-              pendingAttachments[el.fieldName] = defaultValue(meta);
+              formData[el.fieldName] = defaultValue(meta);
             }
           }
         });
