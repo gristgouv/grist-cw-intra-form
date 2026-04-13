@@ -730,7 +730,9 @@ const app = createApp({
       if (command === 'foreColor') {
         document.execCommand('foreColor', false, '#000000');
       } else {
-        document.execCommand('backColor', false, 'transparent');
+        // Using white background because 'transparent' doesn't work with partial selections
+        // TODO: if adding dark mode, use the editor background color
+        document.execCommand('backColor', false, '#FFFFFF');
       }
       colorPicker.show = false;
       richEditor.value?.focus();
