@@ -145,6 +145,11 @@ const app = createApp({
     const dragOverIndex = ref(null);      // Index of element being dragged over
     const dragPosition = ref('');         // 'top' or 'bottom' drop position
 
+    // Custom select state
+    const openDropdown = ref(null);       // Currently open dropdown (fieldName)
+    const searchQuery = reactive({});     // Search query per field
+    const loadingDropdown = ref(null);    // fieldName currently loading ref data
+
     // "Edit popup" (used to edit text) state
     const editPopup = reactive({
       show: false,
@@ -162,7 +167,8 @@ const app = createApp({
       operator: 'equals',
       value: '',
       values: [],
-      hasExisting: false
+      hasExisting: false,
+      tooManyValues: false
     });
 
     // "Validation popup" (used for maxLength) state
@@ -170,6 +176,18 @@ const app = createApp({
       show: false,
       index: null,
       maxLength: '',
+      hasExisting: false
+    });
+
+    // "Ref dropdown filter popup" (filter Ref/RefList options based on another Ref field) state
+    const refDropdownFilterPopup = reactive({
+      show: false,
+      index: null,
+      filterByField: '',
+      eligibleFields: [],
+      linkCol: null,
+      linkColIsMultiple: false,
+      rule: '',
       hasExisting: false
     });
 
@@ -237,7 +255,7 @@ const app = createApp({
         const meta = columnMetadata.value[el.fieldName];
         if (!meta) return false;
         return (meta.choices?.length > 0 && !meta.isMultiple) ||
-          (meta.isRef && !meta.isMultiple && meta.refChoices?.length > 0);
+          (meta.isRef && !meta.isMultiple);
       });
     });
 
@@ -255,9 +273,27 @@ const app = createApp({
 
       // Re-render when value added to ref column (to update ref choices)
       grist.onRecords(() => {
-        getColumnMetadata().then(meta => {
-          columnMetadata.value = meta;
+        getColumnMetadata().then(newMeta => {
+          // Preserve already-loaded ref data from previous metadata
+          // (otherwise the lazy-loaded refChoices would be wiped on every onRecords,
+          // making getOptionLabel fall back to displaying IDs after form submit)
+          for (const colId of Object.keys(newMeta)) {
+            const existing = columnMetadata.value[colId];
+            if (existing?.refDataLoaded) {
+              newMeta[colId].refChoices = existing.refChoices;
+              newMeta[colId].rawRefData = existing.rawRefData;
+              newMeta[colId].refDataLoaded = true;
+            }
+          }
+          columnMetadata.value = newMeta;
         });
+      });
+
+      // Close dropdowns when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.custom-select')) {
+          openDropdown.value = null;
+        }
       });
     });
 
@@ -317,7 +353,6 @@ const app = createApp({
           const type = colsInfo.type[i];  // eg: "Text", "Int", "Ref:Clients", "ChoiceList"
           let choices = null;
           let refTable = null;
-          let refChoices = [];
 
           // For Choice/ChoiceList columns: extract choices from widgetOptions JSON
           // Example: {"choices": ["Option A", "Option B", "Option C"]}
@@ -338,31 +373,15 @@ const app = createApp({
             refTable = type.substring(8);
           }
 
-          // For Ref/RefList: fetch target table and build dropdown choices
+          // For Ref/RefList: resolve display column name from visibleCol.
+          // Actual data fetch is deferred to first dropdown open (see ensureRefDataLoaded)
+          // to avoid blocking the form load for large tables (e.g. 45k communes).
+          let refDisplayCol = null;
           if (refTable) {
-            try {
-              const refData = await grist.docApi.fetchTable(refTable);
-
-              // visibleCol: for Reference columns: numeric ID of the display column
-              let displayColId = null;
-              const visibleColRef = colsInfo.visibleCol?.[i];
-
-              // Resolve numeric ID -> column name using our index
-              if (visibleColRef && visibleColRef !== 0 && colById[visibleColRef]) {
-                displayColId = colById[visibleColRef].colId;
-              }
-
-              // Fallback: use first non-system column if visibleCol not set
-              if (!displayColId || !refData[displayColId]) {
-                displayColId = Object.keys(refData).find(k => k !== 'id' && k !== 'manualSort');
-              }
-
-              // Build choices array: [{id: 1, label: "Client A"}, {id: 2, label: "Client B"}]
-              refChoices = refData.id.map((id, idx) => ({
-                id,
-                label: displayColId && refData[displayColId] ? refData[displayColId][idx] : id
-              }));
-            } catch (e) { }
+            const visibleColRef = colsInfo.visibleCol?.[i];
+            if (visibleColRef && visibleColRef !== 0 && colById[visibleColRef]) {
+              refDisplayCol = colById[visibleColRef].colId;
+            }
           }
 
           // Store all metadata for this column
@@ -373,7 +392,9 @@ const app = createApp({
             isMultiple: type === 'ChoiceList' || type.startsWith('RefList:'),
             isRef: type.startsWith('Ref:') || type.startsWith('RefList:'),
             refTable,                   // Target table name for Ref/RefList
-            refChoices,                 // [{id, label}] for Ref/RefList dropdowns
+            refDisplayCol,              // Display column name (from visibleCol), resolved on data load
+            refChoices: [],             // [{id, label}] populated on first dropdown open
+            refDataLoaded: false,       // Whether ref data has been fetched
             isBool: type === 'Bool',
             isDate: type === 'Date',
             isDateTime: type.startsWith('DateTime:'),
@@ -447,10 +468,18 @@ const app = createApp({
               const condMeta = columnMetadata.value[el.conditional.field];
               const isValidConditionField = condMeta && (
                 (condMeta.choices?.length > 0 && !condMeta.isMultiple) ||
-                (condMeta.isRef && !condMeta.isMultiple && condMeta.refChoices?.length > 0)
+                (condMeta.isRef && !condMeta.isMultiple)
               );
               if (!isValidConditionField) {
                 delete el.conditional;
+              }
+            }
+
+            // refDropdownFilter: verify that the filter-by field still exists and is Ref/RefList
+            if (el.refDropdownFilter) {
+              const filterMeta = columnMetadata.value[el.refDropdownFilter.filterByField];
+              if (!filterMeta?.isRef) {
+                delete el.refDropdownFilter;
               }
             }
           }
@@ -612,6 +641,7 @@ const app = createApp({
       editPopup.show = false;
       filterPopup.show = false;
       validationPopup.show = false;
+      refDropdownFilterPopup.show = false;
     }
 
     // Show edit popup for field label
@@ -801,9 +831,10 @@ const app = createApp({
     // -------------------------------------------------------------------------
 
     // Show popup to configure conditional display rules for a field
-    function showFilterPopup(index) {
+    async function showFilterPopup(index) {
       const el = formElements.value[index];
       filterPopup.index = index;
+      filterPopup.tooManyValues = false;
 
       // Check if this field already has a conditional rule configured
       filterPopup.hasExisting = !!el.conditional;
@@ -813,7 +844,7 @@ const app = createApp({
         filterPopup.field = el.conditional.field;
         filterPopup.operator = el.conditional.operator || 'equals';
         filterPopup.value = el.conditional.value;
-        updateFilterValues();
+        await updateFilterValues();
       } else {
         filterPopup.field = '';
         filterPopup.operator = 'equals';
@@ -825,10 +856,15 @@ const app = createApp({
       showOverlay.value = true;
     }
 
+    // Max values allowed in the conditional popup (native <select> can't handle 45k options)
+    const MAX_CONDITIONAL_VALUES = 200;
+
     // Populate value dropdown based on selected conditional field
     // Shows either reference choices (for Ref columns) or choice options (for Choice columns)
-    function updateFilterValues() {
-      // Reset to empty if no field selected
+    // Async because ref data may need to be lazy-loaded
+    async function updateFilterValues() {
+      filterPopup.tooManyValues = false;
+
       if (!filterPopup.field) {
         filterPopup.values = [];
         return;
@@ -840,10 +876,15 @@ const app = createApp({
         return;
       }
 
-      // For Ref columns: use refChoices (id + label from referenced table)
-      if (meta.refChoices?.length > 0) {
+      // For Ref columns: ensure data is loaded then use refChoices
+      if (meta.isRef) {
+        await ensureRefDataLoaded(filterPopup.field);
+        if (meta.refChoices.length > MAX_CONDITIONAL_VALUES) {
+          filterPopup.tooManyValues = true;
+          filterPopup.values = [];
+          return;
+        }
         filterPopup.values = meta.refChoices;
-      // For Choice columns: use choices array directly
       } else if (meta.choices?.length > 0) {
         filterPopup.values = meta.choices.map(c => ({ id: c, label: c }));
       } else {
@@ -885,7 +926,7 @@ const app = createApp({
       if (!meta) return false;
       return !meta.isBool && !meta.isDate && !meta.isDateTime && !meta.isMultiple && !meta.isAttachment &&
         (!meta.choices || meta.choices.length === 0) &&
-        (!meta.isRef || meta.refChoices.length === 0);
+        !meta.isRef;
     }
 
     // Check if metadata indicates a pure text field (can be multiline)
@@ -948,6 +989,164 @@ const app = createApp({
     }
 
     // -------------------------------------------------------------------------
+    // DROPDOWN FILTER (filter Ref/RefList options based on another Ref field)
+    // -------------------------------------------------------------------------
+    // Running example used throughout this section:
+    //   Current table: "Inscriptions" with columns:
+    //     - Departement (Ref:Departements)
+    //     - Commune (Ref:Communes)
+    //   Table "Communes" has column "Departement" (Ref:Departements) ← the "link column"
+    //
+    //   Goal: when filling the form, filter the Commune dropdown to only show
+    //   communes belonging to the selected Departement.
+    //   Generated rule: choice.Departement == $Departement
+
+    // Check if a form element is a Ref or RefList column
+    function isRefField(element) {
+      if (element.type !== 'field') return false;
+      return !!columnMetadata.value[element.fieldName]?.isRef;
+    }
+
+    // Open the ref filter popup for a given form element.
+    // Fetches _grist_Tables_column on demand (only when user clicks the icon).
+    // Example: user clicks filter icon on the "Commune" field (Ref:Communes)
+    async function showRefDropdownFilterPopup(index) {
+      const element = formElements.value[index];
+      const meta = columnMetadata.value[element.fieldName];
+      if (!meta?.isRef || !meta.refTable) return;
+
+      refDropdownFilterPopup.index = index;
+      refDropdownFilterPopup.hasExisting = !!element.refDropdownFilter;
+
+      // Fetch all columns metadata to inspect the referenced table's structure
+      const colsInfo = await grist.docApi.fetchTable('_grist_Tables_column');
+      const tablesInfo = await grist.docApi.fetchTable('_grist_Tables');
+
+      // Find Ref/RefList columns in the referenced table.
+      // Example: in table "Communes", find columns like "Departement" (Ref:Departements)
+      const currentRefTable = meta.refTable;
+      const currentRefTableNumericId = tablesInfo.id[tablesInfo.tableId.indexOf(currentRefTable)];
+      const refTableCols = [];
+      for (let i = 0; i < colsInfo.colId.length; i++) {
+        if (colsInfo.parentId[i] !== currentRefTableNumericId) continue;
+        const colType = colsInfo.type[i];
+        if (colType.startsWith('Ref:') || colType.startsWith('RefList:')) {
+          refTableCols.push({ colId: colsInfo.colId[i], type: colType });
+        }
+      }
+
+      // Find eligible form fields: other Ref/RefList fields whose referenced table
+      // is pointed to by a column in the current column's referenced table.
+      // Example: "Departement" (Ref:Departements) is eligible because table "Communes"
+      // has a column pointing to "Departements"
+      const eligible = [];
+      for (const el of formElements.value) {
+        if (el.type !== 'field' || el.fieldName === element.fieldName) continue;
+        const elMeta = columnMetadata.value[el.fieldName];
+        if (!elMeta?.isRef || !elMeta.refTable) continue;
+
+        const hasLink = refTableCols.some(col => {
+          const target = col.type.startsWith('Ref:') ? col.type.substring(4) : col.type.substring(8);
+          return target === elMeta.refTable;
+        });
+        if (hasLink) {
+          eligible.push({ fieldName: el.fieldName, label: el.fieldLabel || el.fieldName });
+        }
+      }
+
+      refDropdownFilterPopup.eligibleFields = eligible;
+      // Store refTableCols for use in onRefDropdownFilterFieldChange
+      refDropdownFilterPopup._refTableCols = refTableCols;
+
+      // Pre-fill if already configured
+      if (element.refDropdownFilter) {
+        refDropdownFilterPopup.filterByField = element.refDropdownFilter.filterByField;
+        onRefDropdownFilterFieldChange();
+      } else {
+        refDropdownFilterPopup.filterByField = '';
+        refDropdownFilterPopup.linkCol = null;
+        refDropdownFilterPopup.rule = '';
+      }
+
+      refDropdownFilterPopup.show = true;
+      showOverlay.value = true;
+    }
+
+    // Called when user selects a filter-by field in the ref filter popup.
+    // Auto-detects the link column in the referenced table and builds the display rule.
+    // Example: user picks "Departement" → we find "Departement" (Ref:Departements)
+    // in table "Communes" → rule: choice.Departement == $Departement
+    function onRefDropdownFilterFieldChange() {
+      const filterByField = refDropdownFilterPopup.filterByField;
+      if (!filterByField) {
+        refDropdownFilterPopup.linkCol = null;
+        refDropdownFilterPopup.rule = '';
+        return;
+      }
+
+      const filterMeta = columnMetadata.value[filterByField];
+      const refTableCols = refDropdownFilterPopup._refTableCols || [];
+
+      // Find the column in the referenced table that points to the filter field's table.
+      // Example: in "Communes", find the column whose type is Ref:Departements
+      const linkCol = refTableCols.find(col => {
+        const target = col.type.startsWith('Ref:') ? col.type.substring(4) : col.type.substring(8);
+        return target === filterMeta.refTable;
+      });
+
+      if (!linkCol) {
+        refDropdownFilterPopup.linkCol = null;
+        refDropdownFilterPopup.rule = '';
+        return;
+      }
+
+      refDropdownFilterPopup.linkCol = linkCol;
+      const linkColIsMultiple = linkCol.type.startsWith('RefList:');
+      refDropdownFilterPopup.linkColIsMultiple = linkColIsMultiple;
+      const filterIsMultiple = filterMeta.isMultiple;
+
+      // Build display rule based on column types:
+      // - Ref vs Ref       → choice.Departement == $Departement
+      // - Ref vs RefList    → choice.Departement in $Departements
+      // - RefList vs Ref    → $Departement in choice.Departements
+      // - RefList vs RefList → choice.Departements ∩ $Departements
+      if (linkColIsMultiple && !filterIsMultiple) {
+        refDropdownFilterPopup.rule = `$${filterByField} in choice.${linkCol.colId}`;
+      } else if (!linkColIsMultiple && filterIsMultiple) {
+        refDropdownFilterPopup.rule = `choice.${linkCol.colId} in $${filterByField}`;
+      } else if (!linkColIsMultiple && !filterIsMultiple) {
+        refDropdownFilterPopup.rule = `choice.${linkCol.colId} == $${filterByField}`;
+      } else {
+        refDropdownFilterPopup.rule = `choice.${linkCol.colId} ∩ $${filterByField}`;
+      }
+    }
+
+    // Save the ref filter configuration to the form element
+    async function saveRefDropdownFilter() {
+      if (refDropdownFilterPopup.filterByField && refDropdownFilterPopup.linkCol) {
+        formElements.value[refDropdownFilterPopup.index].refDropdownFilter = {
+          filterByField: refDropdownFilterPopup.filterByField,
+          refTableLinkCol: refDropdownFilterPopup.linkCol.colId,
+          linkColIsMultiple: refDropdownFilterPopup.linkColIsMultiple,
+          rule: refDropdownFilterPopup.rule
+        };
+      } else {
+        formElements.value[refDropdownFilterPopup.index].refDropdownFilter = null;
+      }
+      await saveConfiguration();
+      refDropdownFilterPopup.show = false;
+      showOverlay.value = false;
+    }
+
+    // Remove the ref filter from this field
+    async function deleteRefDropdownFilter() {
+      formElements.value[refDropdownFilterPopup.index].refDropdownFilter = null;
+      await saveConfiguration();
+      refDropdownFilterPopup.show = false;
+      showOverlay.value = false;
+    }
+
+    // -------------------------------------------------------------------------
     // CONDITIONAL FIELD DISPLAY (only available for column types Choice and Ref)
     // -------------------------------------------------------------------------
 
@@ -1000,7 +1199,7 @@ const app = createApp({
     function hasSelectOptions(element) {
       const meta = columnMetadata.value[element.fieldName];
       if (!meta) return false;
-      return (meta.choices?.length > 0) || (meta.isRef && meta.refChoices?.length > 0);
+      return (meta.choices?.length > 0) || meta.isRef;
     }
 
     // Get options for select dropdown
@@ -1020,6 +1219,169 @@ const app = createApp({
       }
 
       return [];
+    }
+
+    // -------------------------------------------------------------------------
+    // LAZY LOADING FOR REF/REFLIST DATA
+    // -------------------------------------------------------------------------
+
+    // Fetch ref table data on first dropdown open (not at form load).
+    // For a 45k communes table, this avoids blocking the initial render.
+    async function ensureRefDataLoaded(colId) {
+      const meta = columnMetadata.value[colId];
+      if (!meta?.isRef || !meta.refTable || meta.refDataLoaded) return;
+
+      loadingDropdown.value = colId;
+      try {
+        const refData = await grist.docApi.fetchTable(meta.refTable);
+        const displayColId = meta.refDisplayCol;
+
+        meta.refChoices = refData.id.map((id, idx) => ({
+          id,
+          label: displayColId && refData[displayColId] ? refData[displayColId][idx] : id
+        }));
+        meta.rawRefData = refData;
+        meta.refDataLoaded = true;
+      } catch (e) {
+        errors[colId] = 'Erreur lors du chargement des données';
+      }
+      loadingDropdown.value = null;
+    }
+
+    // -------------------------------------------------------------------------
+    // CUSTOM SELECT (with search and chips)
+    // -------------------------------------------------------------------------
+
+    // Toggle dropdown open/close (async for lazy loading ref data)
+    // Opens the dropdown immediately, shows "Chargement..." inside while fetching
+    async function toggleDropdown(fieldName) {
+      if (openDropdown.value === fieldName) {
+        openDropdown.value = null;
+      } else {
+        openDropdown.value = fieldName;
+        searchQuery[fieldName] = '';
+        // Load ref data if not yet fetched (dropdown is already open, shows loading state)
+        await ensureRefDataLoaded(fieldName);
+      }
+    }
+
+    // Get label for a selected value
+    function getOptionLabel(element, value) {
+      const options = getSelectOptions(element);
+      const opt = options.find(o => o.id === value);
+      return opt ? opt.label : value;
+    }
+
+    // Max options displayed in a dropdown (avoid rendering 45k DOM nodes)
+    const MAX_DISPLAYED_OPTIONS = 100;
+
+    // Get filtered options based on search query and optional ref dropdown filter.
+    // Results are capped at MAX_DISPLAYED_OPTIONS to avoid DOM performance issues.
+    // The ref dropdown filter block only runs if element.refDropdownFilter is configured.
+    function getFilteredOptions(element) {
+      let options = getSelectOptions(element);
+      const searchBarQuery = (searchQuery[element.fieldName] || '').toLowerCase();
+      if (searchBarQuery) {
+        options = options.filter(o => o.label.toLowerCase().includes(searchBarQuery));
+      }
+
+      // Apply ref dropdown filter only if configured
+      const refDropdownFilter = element.refDropdownFilter;
+      if (refDropdownFilter) {
+        const meta = columnMetadata.value[element.fieldName];
+        const filterValue = formData[refDropdownFilter.filterByField];
+
+        if (filterValue && !(Array.isArray(filterValue) && filterValue.length === 0)) {
+          const rawRefData = meta.rawRefData;
+          if (rawRefData) {
+            const linkCol = refDropdownFilter.refTableLinkCol;
+            const linkColIsMultiple = refDropdownFilter.linkColIsMultiple;
+            const filterIsMultiple = Array.isArray(filterValue);
+
+            // Example: Commune (Ref:Communes) filtered by Departement (Ref:Departements)
+            // For each commune option, check if its Departement matches the selected one
+            options = options.filter(opt => {
+              const refIdx = rawRefData.id.indexOf(opt.id);
+              if (refIdx === -1) return true;
+
+              const linkValue = rawRefData[linkCol]?.[refIdx];
+
+              if (linkColIsMultiple && !filterIsMultiple) {
+                // $Departement in choice.Departements (RefList)
+                if (Array.isArray(linkValue) && linkValue[0] === 'L') {
+                  return linkValue.slice(1).includes(parseInt(filterValue));
+                }
+                return false;
+              } else if (!linkColIsMultiple && filterIsMultiple) {
+                // choice.Departement in $Departements
+                return filterValue.map(v => parseInt(v)).includes(parseInt(linkValue));
+              } else if (!linkColIsMultiple && !filterIsMultiple) {
+                // choice.Departement == $Departement
+                return parseInt(linkValue) === parseInt(filterValue);
+              } else {
+                // Both RefList: intersection
+                if (Array.isArray(linkValue) && linkValue[0] === 'L') {
+                  const linkIds = linkValue.slice(1).map(v => parseInt(v));
+                  const filterIds = filterValue.map(v => parseInt(v));
+                  return linkIds.some(id => filterIds.includes(id));
+                }
+                return false;
+              }
+            });
+          }
+        }
+      }
+
+      return options.slice(0, MAX_DISPLAYED_OPTIONS);
+    }
+
+    // Check if there are more options than what's displayed
+    function hasMoreOptions(element) {
+      return getSelectOptions(element).length > MAX_DISPLAYED_OPTIONS;
+    }
+
+    // Check if option is selected
+    function isOptionSelected(fieldName, optionId) {
+      const meta = columnMetadata.value[fieldName];
+      if (meta?.isMultiple) {
+        return (formData[fieldName] || []).includes(optionId);
+      }
+      return formData[fieldName] === optionId;
+    }
+
+    // Select an option (handles both single and multiple)
+    function selectOption(element, optionId) {
+      const fieldName = element.fieldName;
+      const meta = columnMetadata.value[fieldName];
+
+      if (meta?.isMultiple) {
+        // Multiple: toggle selection
+        const current = formData[fieldName] || [];
+        const index = current.indexOf(optionId);
+        if (index > -1) {
+          // Already selected → remove it
+          current.splice(index, 1);
+        } else {
+          // Not selected → add it
+          current.push(optionId);
+        }
+        formData[fieldName] = [...current];
+      } else {
+        // Single: select and close
+        formData[fieldName] = optionId;
+        openDropdown.value = null;
+      }
+    }
+
+    // Remove a selection from chips (for multiple)
+    function removeSelection(fieldName, value) {
+      const current = formData[fieldName] || [];
+      const index = current.indexOf(value);
+      if (index > -1) {
+        // Found in array → remove it
+        current.splice(index, 1);
+        formData[fieldName] = [...current];
+      }
     }
 
     // -------------------------------------------------------------------------
@@ -1205,6 +1567,7 @@ const app = createApp({
       dragPosition,
       editPopup,
       filterPopup,
+      refDropdownFilterPopup,
       validationPopup,
       richEditor,
       colorPicker,
@@ -1212,6 +1575,9 @@ const app = createApp({
       editorColors,
       emojis,
       activeFormats,
+      openDropdown,
+      loadingDropdown,
+      searchQuery,
 
       // Computed
       containerStyle,
@@ -1252,6 +1618,11 @@ const app = createApp({
       updateFilterValues,
       saveFilter,
       deleteFilter,
+      showRefDropdownFilterPopup,
+      onRefDropdownFilterFieldChange,
+      saveRefDropdownFilter,
+      deleteRefDropdownFilter,
+      isRefField,
       isTextOrNumericField,
       isPureTextField,
       showValidationPopup,
@@ -1262,6 +1633,13 @@ const app = createApp({
       getLabelHtml,
       hasSelectOptions,
       getSelectOptions,
+      toggleDropdown,
+      getOptionLabel,
+      getFilteredOptions,
+      hasMoreOptions,
+      isOptionSelected,
+      selectOption,
+      removeSelection,
       submitForm
     };
   }
