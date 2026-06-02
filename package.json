@@ -1,0 +1,15 @@
+{
+  "name": "grist-cw-intra-form",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Grist custom widget: configurable internal form (drag&drop, rich text, conditional fields, validation). Runtime: vanilla Vue 3 via CDN, no bundler. Node tooling here is dev-only (tests + CI).",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "devDependencies": {
+    "happy-dom": "^15.0.0",
+    "vitest": "^2.0.0"
+  }
+}
