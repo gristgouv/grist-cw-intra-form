@@ -91,7 +91,8 @@
               <template v-if="element.type === 'field'">
                 <div class="icon-btn" @click="editLabel(index)" title="Modifier le libelle">&#9998;</div>
                 <div class="icon-btn" :class="{ active: element.required }" @click="toggleRequired(index)" title="Obligatoire">&#10022;</div>
-                <div class="icon-btn" :class="{ active: element.conditional }" @click="showFilterPopup(index)" title="Conditionnel">&#9889;</div>
+                <div class="icon-btn" :class="{ active: element.conditional }" @click="showConditionalPopup(index)" title="Conditionnel">&#9889;</div>
+                <div v-if="isRefField(element)" class="icon-btn" :class="{ active: element.refDropdownFilter }" @click="showRefDropdownFilterPopup(index)" title="Filtre liste déroulante">&#128279;</div>
                 <div v-if="isTextOrNumericField(element)" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" title="Critère de validation">&#10003;</div>
                 <div v-if="isPureTextField(element)" class="icon-btn" :class="{ active: element.multiline }" @click="toggleMultiline(index)" title="Multiligne">&#9776;</div>
               </template>
@@ -127,7 +128,7 @@
 
     <!-- Formulaire principal -->
     <div class="container" :style="containerStyle">
-      <template v-for="element in formElements" :key="element.fieldName || element.content">
+      <template v-for="element in formElements" :key="element._uid">
         <!-- Séparateur -->
         <div v-if="element.type === 'separator'" class="separator"></div>
         <!-- Texte -->
@@ -139,11 +140,26 @@
           :class="{ 'checkbox-field': columnMetadata[element.fieldName]?.isBool, hidden: !shouldShowField(element) }"
         >
           <template v-if="columnMetadata[element.fieldName]?.isBool">
-            <input type="checkbox" v-model="formData[element.fieldName]">
-            <label v-html="getLabelHtml(element)"></label>
+            <input
+              type="checkbox"
+              :id="'cb_' + element.fieldName"
+              v-model="formData[element.fieldName]"
+              :aria-required="element.required ? 'true' : null"
+              :aria-invalid="errors[element.fieldName] ? 'true' : null"
+              :aria-describedby="errors[element.fieldName] ? 'err_' + element.fieldName : null"
+              @keydown.enter.prevent="formData[element.fieldName] = !formData[element.fieldName]"
+            >
+            <label :for="'cb_' + element.fieldName" v-html="getLabelHtml(element)"></label>
           </template>
           <template v-else>
-            <label v-html="getLabelHtml(element)"></label>
+            <!-- :for cible les inputs natifs (input_X). Pour le custom-select le combobox
+                 a son propre aria-labelledby="label_X", donc le for tombe dans le vide
+                 mais sans conséquence (label aussi visuel via proximité). -->
+            <label
+              :id="'label_' + element.fieldName"
+              :for="hasSelectOptions(element) || columnMetadata[element.fieldName]?.isAttachment ? null : ('input_' + element.fieldName)"
+              v-html="getLabelHtml(element)"
+            ></label>
             <!-- Input selon le type de colonne -->
             <!-- Attachments -->
             <div v-if="columnMetadata[element.fieldName]?.isAttachment" class="attachment-input">
@@ -154,7 +170,16 @@
                 style="display: none"
                 @change="onFileSelect(element.fieldName, $event)"
               >
-              <button type="button" class="attachment-btn" @click="triggerFileInput(element.fieldName)">Charger une PJ</button>
+              <button
+                type="button"
+                class="attachment-btn"
+                :id="'btn_' + element.fieldName"
+                :aria-labelledby="'label_' + element.fieldName + ' btn_label_' + element.fieldName"
+                :aria-required="element.required ? 'true' : null"
+                :aria-invalid="errors[element.fieldName] ? 'true' : null"
+                :aria-describedby="errors[element.fieldName] ? 'err_' + element.fieldName : null"
+                @click="triggerFileInput(element.fieldName)"
+              ><span :id="'btn_label_' + element.fieldName">Charger une PJ</span></button>
               <div class="attachment-list">
                 <div v-for="(file, idx) in pendingAttachments[element.fieldName]" :key="idx" class="attachment-item">
                   <span class="attachment-name">{{ file.name }}</span>
@@ -163,61 +188,239 @@
                 </div>
               </div>
             </div>
+            <!-- Known a11y issues parkées : sur Firefox + VoiceOver macOS, Tab ne
+                 focus pas les segments jj/mm/aaaa des inputs date natifs, et
+                 quand la valeur est vide les segments annoncent "NaN" (bug
+                 WebKit/Gecko documenté). Pour une accessibilité bout-en-bout,
+                 refactor en 3 inputs séparés jour/mois/année (pattern DSFR du
+                 design system de l'État) — à faire plus tard. -->
             <!-- DateTime -->
             <input
               v-else-if="columnMetadata[element.fieldName]?.isDateTime"
               type="datetime-local"
+              :id="'input_' + element.fieldName"
               v-model="formData[element.fieldName]"
+              :aria-required="element.required ? 'true' : null"
+              :aria-invalid="errors[element.fieldName] ? 'true' : null"
+              :aria-describedby="dateInputDescribedBy(element)"
             >
             <!-- Date -->
             <input
               v-else-if="columnMetadata[element.fieldName]?.isDate"
               type="date"
+              :id="'input_' + element.fieldName"
               v-model="formData[element.fieldName]"
+              :aria-required="element.required ? 'true' : null"
+              :aria-invalid="errors[element.fieldName] ? 'true' : null"
+              :aria-describedby="dateInputDescribedBy(element)"
             >
-            <!-- Select multiple (ChoiceList, RefList) -->
-            <select
-              v-else-if="columnMetadata[element.fieldName]?.isMultiple"
-              multiple
-              v-model="formData[element.fieldName]"
-            >
-              <option
-                v-for="opt in getSelectOptions(element)"
-                :key="opt.id"
-                :value="opt.id"
-              >{{ opt.label }}</option>
-            </select>
-            <!-- Select simple (Choice, Ref) -->
-            <select
+            <!-- Custom select (Choice, ChoiceList, Ref, RefList) -->
+            <div
               v-else-if="hasSelectOptions(element)"
-              v-model="formData[element.fieldName]"
+              class="custom-select"
+              :class="{ open: openDropdown === element.fieldName, 'is-multi': columnMetadata[element.fieldName]?.isMultiple }"
             >
-              <option value="">-- Sélectionner --</option>
-              <option
-                v-for="opt in getSelectOptions(element)"
-                :key="opt.id"
-                :value="opt.id"
-              >{{ opt.label }}</option>
-            </select>
+              <!-- Hidden helper toujours présent (single + multi) :
+                   signale au SR qu'on peut taper pour filtrer la liste (sans cela
+                   l'utilisateur clavier/SR n'a aucun indice qu'une recherche existe). -->
+              <span :id="'search_hint_' + element.fieldName" class="sr-only">Avec recherche</span>
+              <!-- Multi-select only: hidden helpers for screen readers
+                   - multi_hint : annonce que c'est une sélection multiple (le aria-multiselectable
+                     du listbox n'est annoncé qu'à l'entrée de la liste, pas au combobox)
+                   - count : compteur dynamique des sélections
+                   - remove : description "retirer" partagée pour les chips -->
+              <template v-if="columnMetadata[element.fieldName]?.isMultiple">
+                <span :id="'multi_hint_' + element.fieldName" class="sr-only">Sélection multiple</span>
+                <span :id="'count_' + element.fieldName" class="sr-only">{{ getCountText(element) }}</span>
+                <span :id="'remove_' + element.fieldName" hidden>retirer</span>
+              </template>
+
+              <!-- Chips above the select (multi-select only).
+                   Each chip is a <button> whose accessible name = the value,
+                   description = "retirer". So screen readers say "Beauregard, bouton, retirer". -->
+              <ul
+                class="chips"
+                v-if="columnMetadata[element.fieldName]?.isMultiple && formData[element.fieldName]?.length"
+              >
+                <li
+                  v-for="(val, idx) in formData[element.fieldName]"
+                  :key="val"
+                  class="chip-item"
+                >
+                  <!-- aria-labelledby : seulement sur le PREMIER chip (idx === 0) on chaîne
+                       label_X + count_X + chip_X_0 → "Communes, 3 sélections, Beauregard".
+                       Les chips suivants utilisent juste leur texte → "Bénonces" tout court.
+                       Évite la répétition verbeuse "Communes 3 sélections X" sur chaque chip
+                       quand l'utilisateur balaie la liste. -->
+                  <button
+                    type="button"
+                    class="chip"
+                    :id="'chip_' + element.fieldName + '_' + idx"
+                    :aria-labelledby="idx === 0 ? ('label_' + element.fieldName + ' count_' + element.fieldName + ' chip_' + element.fieldName + '_0') : null"
+                    :aria-describedby="'remove_' + element.fieldName"
+                    @click.stop="removeSelection(element, val, idx, $event)"
+                    @keydown="onChipKeydown(element, val, idx, $event)"
+                  >{{ getOptionLabel(element, val) }}<span class="chip-x" aria-hidden="true">×</span></button>
+                </li>
+              </ul>
+
+              <!-- Trigger = <div role="combobox" tabindex="0"> (pattern Higley / W3C APG).
+                   On évite <button> exprès : sur un button, VoiceOver lit le contenu
+                   (la valeur sélectionnée) AVANT le aria-labelledby, donc on entendait
+                   "haha, choix, combobox" au lieu de "choix, haha, combobox". Avec un div,
+                   le nom accessible vient uniquement de aria-labelledby. -->
+              <div
+                class="custom-select-display"
+                role="combobox"
+                tabindex="0"
+                aria-haspopup="listbox"
+                :aria-expanded="openDropdown === element.fieldName"
+                :aria-controls="'listbox_' + element.fieldName"
+                :id="'combo_' + element.fieldName"
+                :aria-labelledby="comboLabelledBy(element)"
+                :aria-describedby="comboDescribedBy(element)"
+                :aria-required="element.required ? 'true' : null"
+                :aria-invalid="errors[element.fieldName] ? 'true' : null"
+                @click="toggleDropdown(element.fieldName)"
+                @keydown="onSelectKeydown(element, $event)"
+              >
+                <!-- Multi-select : placeholder permanent (les valeurs sont dans les chips au-dessus).
+                     aria-hidden : la valeur "lue" pour SR vient de aria-labelledby / describedby. -->
+                <span v-if="columnMetadata[element.fieldName]?.isMultiple" class="placeholder" aria-hidden="true">-- Sélectionner --</span>
+                <!-- Single-select : valeur sélectionnée (foncée) ou placeholder (gris).
+                     - Le span a un id pour être référencé par aria-labelledby du combobox
+                       (SR lit "label, valeur, combobox").
+                     - aria-hidden="true" évite que VoiceOver navigue dans le texte du
+                       span en mode web (sinon la flèche bas focus les "--" du placeholder).
+                       La spec ARIA permet à aria-labelledby de référencer un élément
+                       aria-hidden : le contenu textuel est quand même utilisé pour le nom. -->
+                <span
+                  v-else
+                  :id="'value_' + element.fieldName"
+                  :class="formData[element.fieldName] ? 'single-value' : 'placeholder'"
+                  aria-hidden="true"
+                >{{ formData[element.fieldName] ? getOptionLabel(element, formData[element.fieldName]) : '-- Sélectionner --' }}</span>
+                <span class="dropdown-arrow" aria-hidden="true">▼</span>
+              </div>
+              <div class="custom-select-dropdown" v-if="openDropdown === element.fieldName">
+                <!-- Loading state while fetching ref data -->
+                <div v-if="loadingDropdown === element.fieldName" class="dropdown-loading" role="status">
+                  Chargement...
+                </div>
+                <!-- Normal dropdown content.
+                     aria-activedescendant lives on the search input (the focused element),
+                     pointing to the currently highlighted option in the listbox below. -->
+                <template v-else>
+                  <input
+                    type="text"
+                    class="search-input"
+                    placeholder="Rechercher..."
+                    aria-label="Rechercher dans les options"
+                    aria-autocomplete="list"
+                    :aria-controls="'listbox_' + element.fieldName"
+                    :aria-activedescendant="activeOptionId(element)"
+                    :ref="el => setSearchInputRef(element.fieldName, el)"
+                    v-model="searchQuery[element.fieldName]"
+                    @click.stop
+                    @input="onSearchInput(element, $event)"
+                    @keydown="onSearchKeydown(element, $event)"
+                  >
+                  <ul
+                    class="options-list"
+                    role="listbox"
+                    :id="'listbox_' + element.fieldName"
+                    :aria-multiselectable="columnMetadata[element.fieldName]?.isMultiple ? 'true' : 'false'"
+                    :aria-label="'Options pour ' + (element.fieldLabel || element.fieldName)"
+                  >
+                    <li
+                      v-for="(opt, idx) in getFilteredOptions(element)"
+                      :key="opt.id"
+                      :id="'opt_' + element.fieldName + '_' + idx"
+                      class="option"
+                      role="option"
+                      :class="{ selected: isOptionSelected(element.fieldName, opt.id), active: activeIndex[element.fieldName] === idx }"
+                      :aria-selected="isOptionSelected(element.fieldName, opt.id) ? 'true' : 'false'"
+                      @click.stop="selectOption(element, opt.id)"
+                      @mouseenter="activeIndex[element.fieldName] = idx"
+                    >{{ opt.label }}</li>
+                    <li v-if="getFilteredOptions(element).length === 0" class="no-results" role="status">
+                      Aucun résultat
+                    </li>
+                    <li v-if="hasMoreOptions(element)" class="more-results" role="status">
+                      Affinez votre recherche pour voir plus de résultats
+                    </li>
+                  </ul>
+                </template>
+              </div>
+              <!-- Live region for dynamic announcements (multi-select only):
+                   "X ajoutée, N sélectionnées" / "X retirée, N sélectionnées" -->
+              <div
+                v-if="columnMetadata[element.fieldName]?.isMultiple"
+                class="sr-only"
+                aria-live="polite"
+                aria-atomic="true"
+              >{{ liveMessage[element.fieldName] || '' }}</div>
+            </div>
             <!-- Textarea (multiline) -->
             <textarea
               v-else-if="element.multiline"
+              :id="'input_' + element.fieldName"
               v-model="formData[element.fieldName]"
+              :aria-required="element.required ? 'true' : null"
+              :aria-invalid="errors[element.fieldName] ? 'true' : null"
+              :aria-describedby="errors[element.fieldName] ? 'err_' + element.fieldName : null"
               rows="4"
             ></textarea>
-            <!-- Input texte/numerique par defaut -->
+            <!-- Input texte/numerique par defaut.
+                 inputmode adapte le clavier mobile (numeric / decimal). Pour les écrans
+                 lecteurs, l'aria-describedby pointe vers un hint sr-only qui annonce
+                 le type attendu (sinon le SR dit juste "modifier le texte, vierge"). -->
             <input
               v-else
               type="text"
+              :id="'input_' + element.fieldName"
+              :inputmode="getInputMode(element)"
               v-model="formData[element.fieldName]"
+              :aria-required="element.required ? 'true' : null"
+              :aria-invalid="errors[element.fieldName] ? 'true' : null"
+              :aria-describedby="textInputDescribedBy(element)"
             >
+            <!-- Hint sr-only pour les champs numériques (Int / Numeric) -->
+            <span
+              v-if="getNumericHint(element)"
+              :id="'hint_' + element.fieldName"
+              class="sr-only"
+            >{{ getNumericHint(element) }}</span>
+            <!-- Hint sr-only pour les champs Date / DateTime.
+                 Lu par les lecteurs d'écran via aria-describedby — explique l'interaction
+                 clavier (flèches) parce que les navigateurs annoncent maladroitement
+                 les segments jj/mm/aaaa des inputs date natifs. -->
+            <span
+              v-if="columnMetadata[element.fieldName]?.isDate || columnMetadata[element.fieldName]?.isDateTime"
+              :id="'hint_date_' + element.fieldName"
+              class="sr-only"
+            >Utilisez les flèches haut et bas pour modifier la valeur, gauche et droite pour passer d'un champ à l'autre.</span>
           </template>
-          <div v-if="errors[element.fieldName]" class="error-message show">{{ errors[element.fieldName] }}</div>
+          <!-- Per-field error.
+               - Toujours dans le DOM, même quand pas d'erreur (texte vide).
+                 Évite que Firefox+VoiceOver l'annonce comme "nouveau contenu" à chaque submit.
+               - CSS .error-message:empty { display: none } pour le cacher visuellement quand vide
+                 (les transitions CSS ne sont pas annoncées par les SR).
+               - PAS de role="alert" : la seule live region est .form-error global.
+               - Lu par VO via aria-describedby quand le focus arrive sur le champ,
+                 ce qui donne "[label], invalide, [message]". -->
+          <div
+            :id="'err_' + element.fieldName"
+            class="error-message"
+          >{{ errors[element.fieldName] || '' }}</div>
         </div>
       </template>
 
-      <div v-if="formErrorMessage" class="form-error show">{{ formErrorMessage }}</div>
-      <div v-if="formSuccessMessage" class="form-success show">{{ formSuccessMessage }}</div>
+      <!-- Le form-error reste pour les erreurs hors-validation (réseau, serveur). Pour la
+           validation, c'est le error summary en haut qui gère, donc on ne l'affiche pas ici
+           quand des champs sont en erreur. Le success message reste polite. -->
+      <div v-if="formErrorMessage" role="alert" class="form-error show">{{ formErrorMessage }}</div>
+      <div v-if="formSuccessMessage" role="status" class="form-success show">{{ formSuccessMessage }}</div>
       <button class="btn" @click="submitForm">Valider</button>
     </div>
 
@@ -277,34 +480,37 @@
     </div>
 
     <!-- Popup de condition -->
-    <div v-if="filterPopup.show" class="filter-popup">
+    <div v-if="conditionalPopup.show" class="filter-popup">
       <h3>Affichage conditionnel</h3>
       <div class="filter-row">
         <label>Ce champ est affiché si :</label>
       </div>
       <div class="filter-row">
-        <select v-model="filterPopup.field" @change="updateFilterValues">
+        <select v-model="conditionalPopup.field" @change="updateConditionalValues">
           <option value="">-- Sélectionner un champ --</option>
           <option v-for="f in conditionalFields" :key="f.fieldName" :value="f.fieldName">{{ f.fieldName }}</option>
         </select>
       </div>
       <div class="filter-row">
-        <select v-model="filterPopup.operator">
+        <select v-model="conditionalPopup.operator">
           <option value="equals">est égal à</option>
           <option value="notEquals">n'est pas égal à</option>
         </select>
       </div>
-      <div class="filter-row">
-        <select v-model="filterPopup.value">
+      <div class="filter-row" v-if="conditionalPopup.tooManyValues">
+        <div class="filter-too-many">Cette colonne contient trop de valeurs pour être utilisée comme condition.</div>
+      </div>
+      <div class="filter-row" v-else>
+        <select v-model="conditionalPopup.value">
           <option value="">-- Sélectionner une valeur --</option>
-          <option v-for="v in filterPopup.values" :key="v.id" :value="v.id">{{ v.label }}</option>
+          <option v-for="v in conditionalPopup.values" :key="v.id" :value="v.id">{{ v.label }}</option>
         </select>
       </div>
       <div class="filter-popup-buttons">
-        <button v-if="filterPopup.hasExisting" class="delete" @click="deleteFilter">Supprimer</button>
+        <button v-if="conditionalPopup.hasExisting" class="delete" @click="deleteConditional">Supprimer</button>
         <div style="display: flex; gap: 8px;">
-          <button class="cancel" @click="filterPopup.show = false; showOverlay = false">Annuler</button>
-          <button class="save" @click="saveFilter">Enregistrer</button>
+          <button class="cancel" @click="conditionalPopup.show = false; showOverlay = false">Annuler</button>
+          <button class="save" @click="saveConditional">Enregistrer</button>
         </div>
       </div>
     </div>
@@ -319,6 +525,33 @@
         <div style="display: flex; gap: 8px;">
           <button class="cancel" @click="validationPopup.show = false; showOverlay = false">Annuler</button>
           <button class="save" @click="saveValidation">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popup filtre liste déroulante (Ref/RefList) -->
+    <div v-if="refDropdownFilterPopup.show" class="filter-popup">
+      <h3>Filtre sur liste déroulante</h3>
+      <div class="filter-row">
+        <label>Filtrer cette colonne par rapport à :</label>
+      </div>
+      <div class="filter-row">
+        <select v-model="refDropdownFilterPopup.filterByField" @change="onRefDropdownFilterFieldChange">
+          <option value="">-- Sélectionner un champ --</option>
+          <option v-for="f in refDropdownFilterPopup.eligibleFields" :key="f.fieldName" :value="f.fieldName">{{ f.label }}</option>
+        </select>
+      </div>
+      <div v-if="refDropdownFilterPopup.rule" class="filter-row">
+        <div class="ref-filter-rule">Règle : <code>{{ refDropdownFilterPopup.rule }}</code></div>
+      </div>
+      <div v-if="refDropdownFilterPopup.eligibleFields.length === 0" class="filter-row">
+        <div class="ref-filter-no-fields">Aucun champ de référence compatible dans le formulaire.</div>
+      </div>
+      <div class="filter-popup-buttons">
+        <button v-if="refDropdownFilterPopup.hasExisting" class="delete" @click="deleteRefDropdownFilter">Supprimer</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="cancel" @click="refDropdownFilterPopup.show = false; showOverlay = false">Annuler</button>
+          <button class="save" @click="saveRefDropdownFilter">Enregistrer</button>
         </div>
       </div>
     </div>
