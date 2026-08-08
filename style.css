@@ -494,7 +494,8 @@ select[multiple] option:checked {
 
 .edit-popup,
 .filter-popup,
-.validation-popup {
+.validation-popup,
+.hiding-popup {
   position: fixed;
   top: 50%;
   left: 50%;
@@ -509,7 +510,8 @@ select[multiple] option:checked {
 
 .edit-popup h3,
 .filter-popup h3,
-.validation-popup h3 {
+.validation-popup h3,
+.hiding-popup h3 {
   font-size: 16px;
   margin-bottom: 12px;
   color: #37352f;
@@ -529,7 +531,8 @@ select[multiple] option:checked {
 
 .edit-popup-buttons,
 .filter-popup-buttons,
-.validation-popup-buttons {
+.validation-popup-buttons,
+.hiding-popup-buttons {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
@@ -537,7 +540,8 @@ select[multiple] option:checked {
 
 .edit-popup-buttons button,
 .filter-popup-buttons button,
-.validation-popup-buttons button {
+.validation-popup-buttons button,
+.hiding-popup-buttons button {
   padding: 8px 16px;
   border: none;
   border-radius: 4px;
@@ -545,14 +549,16 @@ select[multiple] option:checked {
   font-size: 14px;
 }
 
-.validation-popup label {
+.validation-popup label,
+.hiding-popup label {
   display: block;
   font-size: 14px;
   color: #37352f;
   margin-bottom: 8px;
 }
 
-.validation-popup input {
+.validation-popup input,
+.hiding-popup input {
   width: 100%;
   padding: 8px;
   border: 1px solid #e0e0e0;
@@ -561,7 +567,8 @@ select[multiple] option:checked {
   margin-bottom: 16px;
 }
 
-.validation-popup-buttons {
+.validation-popup-buttons,
+.hiding-popup-buttons {
   justify-content: space-between;
 }
 

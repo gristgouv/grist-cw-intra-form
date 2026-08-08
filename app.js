@@ -173,6 +173,14 @@ const app = createApp({
       hasExisting: false
     });
 
+    // "Hiding popup" (used for hiding) state
+    const hidingPopup = reactive({
+      show: false,
+      index: null,
+      hiding: '',
+      hasExisting: false
+    });
+
     // Rich editor state
     const richEditor = ref(null);
     const colorPicker = reactive({ show: false, type: '' });
@@ -413,7 +421,8 @@ const app = createApp({
           fieldLabel: columnMetadata.value[col]?.label || col,
           required: false,
           maxLength: null,
-          conditional: null
+          conditional: null,
+          hiding: null
         }));
         
        // TODO : make it reactive instead
@@ -440,6 +449,11 @@ const app = createApp({
             // maxLength: only valid for text/numeric/int fields
             if (el.maxLength != null && meta && !isTextOrNumericFieldByMeta(meta)) {
               delete el.maxLength;
+            }
+
+            // hiding: only valid for text/numeric/int fields
+            if (el.hiding != null && meta && !isTextOrNumericFieldByMeta(meta)) {
+              delete el.hiding;
             }
 
             // conditional: verify that the referenced field is still a valid condition field
@@ -519,7 +533,8 @@ const app = createApp({
           fieldLabel: meta?.label || col,
           required: false,
           maxLength: null,
-          conditional: null
+          conditional: null,
+          hiding: null
         });
         // Initialize form data for this field
         formData[col] = defaultValue(meta);
@@ -946,6 +961,36 @@ const app = createApp({
       formElements.value[index].multiline = !formElements.value[index].multiline;
       await saveConfiguration();
     }
+    // -------------------------------------------------------------------------
+    // HIDING POPUP
+    // -------------------------------------------------------------------------
+
+     // Show popup to configure hidden field value
+    function showHidingPopup(index) {
+      const el = formElements.value[index];
+      hidingPopup.index = index;
+      hidingPopup.hasExisting = el.hiding !== null && el.hiding !== undefined;
+      hidingPopup.hiding = el.hiding || '';
+      hidingPopup.show = true;
+      showOverlay.value = true;
+    }
+
+    // Save hidden field value
+    async function saveHiding() {
+      const hiding = hidingPopup.hiding;
+      formElements.value[hidingPopup.index].hiding = hiding ? hiding : null;
+      await saveConfiguration();
+      hidingPopup.show = false;
+      showOverlay.value = false;
+    }
+
+    // Remove hidden field value
+    async function deleteHiding() {
+      formElements.value[hidingPopup.index].hiding = null;
+      await saveConfiguration();
+      hidingPopup.show = false;
+      showOverlay.value = false;
+    }
 
     // -------------------------------------------------------------------------
     // CONDITIONAL FIELD DISPLAY (only available for column types Choice and Ref)
@@ -954,7 +999,11 @@ const app = createApp({
     // Determines if a field should be visible based on its conditional rule
     // A conditional rule is: "show this field if [otherField] [equals/notEquals] [value]"
     // Returns true if: no condition set, or condition is satisfied
-    function shouldShowField(element) {
+    function shouldShowField(element) { 
+      if (element.hiding) {
+        formData[element.fieldName] = element.hiding;
+        return false;
+      }
       if (!element.conditional) return true;
 
       const conditionalField = element.conditional.field;    // Field we depend on (eg "Status")
@@ -1107,8 +1156,8 @@ const app = createApp({
       const fields = {};
       for (const element of formElements.value) {
         if (element.type !== 'field') continue;
-        if (!shouldShowField(element)) continue;
-
+        if (!shouldShowField(element) && !element.hiding) continue;
+        
         const col = element.fieldName;
         const meta = columnMetadata.value[col];
         let value = formData[col];
@@ -1206,6 +1255,7 @@ const app = createApp({
       editPopup,
       filterPopup,
       validationPopup,
+      hidingPopup,
       richEditor,
       colorPicker,
       emojiPicker,
@@ -1258,6 +1308,9 @@ const app = createApp({
       saveValidation,
       deleteValidation,
       toggleMultiline,
+      showHidingPopup,
+      saveHiding,
+      deleteHiding,
       shouldShowField,
       getLabelHtml,
       hasSelectOptions,

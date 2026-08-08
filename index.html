@@ -94,6 +94,7 @@
                 <div class="icon-btn" :class="{ active: element.conditional }" @click="showFilterPopup(index)" title="Conditionnel">&#9889;</div>
                 <div v-if="isTextOrNumericField(element)" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" title="Critère de validation">&#10003;</div>
                 <div v-if="isPureTextField(element)" class="icon-btn" :class="{ active: element.multiline }" @click="toggleMultiline(index)" title="Multiligne">&#9776;</div>
+                <div class="icon-btn" :class="{ active: element.hiding }" @click="showHidingPopup(index)" title="Champ masqué">&#128065;</div>
               </template>
               <!-- Bouton edit pour texte -->
               <template v-if="element.type === 'text'">
@@ -319,6 +320,20 @@
         <div style="display: flex; gap: 8px;">
           <button class="cancel" @click="validationPopup.show = false; showOverlay = false">Annuler</button>
           <button class="save" @click="saveValidation">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Popup de champ masqué (hiding) -->
+    <div v-if="hidingPopup.show" class="hiding-popup">
+      <h3>Champ masqué</h3>
+      <label>Valeur du champ masqué :</label>
+      <input type="text" v-model="hidingPopup.hiding">
+      <div class="hiding-popup-buttons">
+        <button v-if="hidingPopup.hasExisting" class="delete" @click="deleteHiding">Supprimer</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="cancel" @click="hidingPopup.show = false; showOverlay = false">Annuler</button>
+          <button class="save" @click="saveHiding">Enregistrer</button>
         </div>
       </div>
     </div>
