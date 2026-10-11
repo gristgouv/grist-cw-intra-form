@@ -11,9 +11,24 @@ const read = (p) => readFileSync(resolve(ROOT, p), 'utf-8');
 
 describe('custom-select — a11y baked into the template', () => {
   const html = read('index.html');
+  const src = read('app.js');
 
-  it('uses a <div role="combobox"> trigger (not <button>)', () => {
-    expect(html).toMatch(/role="combobox"/);
+  it('uses a <button> trigger (combobox lives on the search input)', () => {
+    // Sole combobox is the search input — avoids two comboboxes (APG).
+    const trigger = html.match(
+      /<button\s+type="button"\s+class="custom-select-display"[\s\S]*?>/
+    )?.[0];
+    expect(trigger).toBeTruthy();
+    expect(trigger).not.toContain('role="combobox"');
+  });
+
+  it('puts role="combobox" on the search input (open state)', () => {
+    expect(html).toMatch(/class="search-input"[\s\S]*?role="combobox"/);
+    expect(html).toMatch(/aria-autocomplete="list"/);
+  });
+
+  it('hides the trigger from the a11y tree while the dropdown is open', () => {
+    expect(html).toMatch(/:aria-hidden="openDropdown === element\.fieldName \? 'true' : null"/);
   });
 
   it('renders an aria-labelled <ul role="listbox">', () => {
@@ -24,8 +39,20 @@ describe('custom-select — a11y baked into the template', () => {
     expect(html).toContain('aria-multiselectable');
   });
 
-  it('uses .sr-only spans for hint text', () => {
+  it('uses .sr-only spans for multi-select hints (count + selected labels)', () => {
     expect(html).toMatch(/class="sr-only"/);
+    expect(html).toContain("selected_' + element.fieldName");
+    expect(src).toMatch(/function getSelectedValuesText/);
+  });
+
+  it('exposes searchDescribedBy for the open search combobox', () => {
+    expect(src).toMatch(/function searchDescribedBy/);
+    expect(html).toContain(':aria-describedby="searchDescribedBy(element)"');
+  });
+
+  it('leaves aria-activedescendant unset on initial open (activeIndex = null)', () => {
+    // So SRs announce the search combobox before any option.
+    expect(src).toMatch(/activeIndex\[fieldName\]\s*=\s*null/);
   });
 });
 

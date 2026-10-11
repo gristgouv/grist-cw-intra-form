@@ -159,8 +159,10 @@ const app = createApp({
     // fieldName currently loading its ref data
     // Drives the "Chargement..." indicator inside the dropdown.
     const loadingDropdown = ref(null);
-    // Index of the option highlighted by the keyboard arrows, per fieldName.
-    // Drives aria-activedescendant + the .active CSS class.
+    // Index of the option highlighted by keyboard / hover, per fieldName.
+    // Drives the .active CSS class. Also drives aria-activedescendant, but only
+    // once set to a non-null index (on open it stays null so the SR announces
+    // the search combobox itself before any option).
     const activeIndex = reactive({});
     // DOM refs to the search <input> elements, per fieldName.
     const searchInputRefs = {};
@@ -1346,8 +1348,8 @@ const app = createApp({
       return ids.length ? ids.join(' ') : null;
     }
 
-    // aria-labelledby for the combobox trigger.
-    //   Single : label + currently displayed value span → SR reads "Field, value, combobox"
+    // aria-labelledby for the closed trigger button.
+    //   Single : label + currently displayed value span → SR reads "Field, value, button"
     //   Multi  : label only (the selections are conveyed via aria-describedby + chips)
     function comboLabelledBy(element) {
       const fieldName = element.fieldName;
@@ -1356,34 +1358,50 @@ const app = createApp({
       return 'label_' + fieldName + ' value_' + fieldName;
     }
 
-    // Build the aria-describedby attribute value for the combobox trigger.
-    // Always includes :
-    //   - "Avec recherche" hint, so screen-reader users know the list is filterable
-    //     (otherwise they have no way to discover the search).
-    // For multi-select, also :
-    //   - "Sélection multiple" hint (aria-multiselectable is only announced when
-    //     the SR enters the listbox, not on the combobox itself).
-    //   - count helper ("3 sélections" / "Aucune sélection").
+    // aria-describedby for the closed trigger button.
+    // Multi-select: "Sélection multiple" + count + selected labels (so users
+    // hear the values without tabbing through a long chip list).
     // Plus the error message id when the field is invalid.
     function comboDescribedBy(element) {
       const fieldName = element.fieldName;
-      const ids = ['search_hint_' + fieldName];
+      const ids = [];
       if (columnMetadata.value[fieldName]?.isMultiple) {
         ids.push('multi_hint_' + fieldName);
         ids.push('count_' + fieldName);
+        if ((formData[fieldName] || []).length) {
+          ids.push('selected_' + fieldName);
+        }
       }
       if (errors[fieldName]) {
         ids.push('err_' + fieldName);
       }
-      return ids.join(' ');
+      return ids.length ? ids.join(' ') : null;
     }
 
-    // Human-readable count for the multi-select sr-only span (read at the
-    // combobox via aria-describedby). "X sélection(s)"
+    // Same summary on the open-state search combobox as on the closed trigger.
+    function searchDescribedBy(element) {
+      return comboDescribedBy(element);
+    }
+
+    // Human-readable count for the multi-select sr-only span (read via
+    // aria-describedby). "X sélection(s)"
     function getCountText(element) {
       const count = (formData[element.fieldName] || []).length;
       if (count === 0) return 'Aucune sélection';
       return count + ' sélection' + (count > 1 ? 's' : '');
+    }
+
+    // Comma-separated labels of current multi-select values. Caps at 20 so a
+    // huge selection does not dump a novel into the focus announcement;
+    // remaining count is summarized as "et N de plus".
+    function getSelectedValuesText(element) {
+      const values = formData[element.fieldName] || [];
+      if (!values.length) return '';
+      const labels = values.map(v => getOptionLabel(element, v));
+      const MAX = 20;
+      if (labels.length <= MAX) return labels.join(', ');
+      const rest = labels.length - MAX;
+      return labels.slice(0, MAX).join(', ') + ', et ' + rest + ' de plus';
     }
 
     // Push a message into the live region for this field. Polite, atomic.
@@ -1407,7 +1425,9 @@ const app = createApp({
       } else {
         openDropdown.value = fieldName;             //   no  → open it (and implicitly close any other)
         searchQuery[fieldName] = '';                // reset the search query
-        activeIndex[fieldName] = 0;                 // reset the keyboard-highlighted option
+        // null (not 0): no aria-activedescendant on initial focus, so the SR
+        // announces the search combobox before any option.
+        activeIndex[fieldName] = null;
         await ensureRefDataLoaded(fieldName);       // lazy load ref data if not fetched yet
         await nextTick();                           // wait for Vue to render the search input
         searchInputRefs[fieldName]?.focus();        // focus the search input
@@ -1421,10 +1441,11 @@ const app = createApp({
       else delete searchInputRefs[fieldName];
     }
 
-    // aria-activedescendant: id of the currently highlighted option (or null)
+    // aria-activedescendant: id of the currently highlighted option, or null
+    // when nothing is active yet (initial open — lets the SR announce the input).
     function activeOptionId(element) {
       const idx = activeIndex[element.fieldName];
-      if (idx == null) return null;
+      if (idx == null || idx < 0) return null;
       return 'opt_' + element.fieldName + '_' + idx;
     }
 
@@ -1437,7 +1458,7 @@ const app = createApp({
       });
     }
 
-    // Keyboard on the combobox trigger (when closed):
+    // Keyboard on the trigger button (when closed):
     //   Enter / Space / ArrowDown / ArrowUp → open
     //   any printable character → open and seed the search with that character
     function onSelectKeydown(element, e) {
@@ -1450,17 +1471,20 @@ const app = createApp({
         e.preventDefault();
         openDropdown.value = fieldName;
         searchQuery[fieldName] = e.key;
-        activeIndex[fieldName] = 0;
+        // Keep null on open so focus announcement names the search combobox;
+        // further typing (onSearchInput) or ArrowDown will activate an option.
+        activeIndex[fieldName] = null;
         ensureRefDataLoaded(fieldName).then(() => {
           nextTick(() => searchInputRefs[fieldName]?.focus());
         });
       }
     }
 
-    // Input handler: reset the keyboard-active option to the top of the filtered list.
+    // Input handler: highlight (and announce via aria-activedescendant) the
+    // first match of the filtered list — standard autocomplete behaviour.
     function onSearchInput(element, e) {
       const fieldName = element.fieldName;
-      activeIndex[fieldName] = 0;
+      activeIndex[fieldName] = getFilteredOptions(element).length ? 0 : null;
     }
 
     // Keyboard on the search input (focus lives here while dropdown is open).
@@ -1950,8 +1974,10 @@ const app = createApp({
       onSearchInput,
       onChipKeydown,
       getCountText,
+      getSelectedValuesText,
       comboLabelledBy,
       comboDescribedBy,
+      searchDescribedBy,
       getInputMode,
       getNumericHint,
       textInputDescribedBy,

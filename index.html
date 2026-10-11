@@ -152,7 +152,7 @@
             <label :for="'cb_' + element.fieldName" v-html="getLabelHtml(element)"></label>
           </template>
           <template v-else>
-            <!-- :for targets native inputs (input_X). For the custom-select the combobox
+            <!-- :for targets native inputs (input_X). For the custom-select the trigger
                  has its own aria-labelledby="label_X", so :for points nowhere but with
                  no consequence (label is also visually associated via proximity). -->
             <label
@@ -220,18 +220,16 @@
               class="custom-select"
               :class="{ open: openDropdown === element.fieldName, 'is-multi': columnMetadata[element.fieldName]?.isMultiple }"
             >
-              <!-- Hidden helper always present (single + multi):
-                   tells the SR that you can type to filter the list (without it
-                   the keyboard/SR user has no clue that a search exists). -->
-              <span :id="'search_hint_' + element.fieldName" class="sr-only">Avec recherche</span>
               <!-- Multi-select only: hidden helpers for screen readers
                    - multi_hint: announces that this is a multi-selection (the listbox's
                      aria-multiselectable is only announced when entering the list, not on the combobox)
                    - count: dynamic counter of selections
+                   - selected: comma-separated labels (so users need not tab every chip)
                    - remove: shared "remove" description for the chips -->
               <template v-if="columnMetadata[element.fieldName]?.isMultiple">
                 <span :id="'multi_hint_' + element.fieldName" class="sr-only">Sélection multiple</span>
                 <span :id="'count_' + element.fieldName" class="sr-only">{{ getCountText(element) }}</span>
+                <span :id="'selected_' + element.fieldName" class="sr-only">{{ getSelectedValuesText(element) }}</span>
                 <span :id="'remove_' + element.fieldName" hidden>retirer</span>
               </template>
 
@@ -264,23 +262,23 @@
                 </li>
               </ul>
 
-              <!-- Trigger = <div role="combobox" tabindex="0"> (Higley / W3C APG pattern).
-                   We avoid <button> on purpose: on a button, VoiceOver reads the content
-                   (the selected value) BEFORE aria-labelledby, so you'd hear
-                   "haha, choice, combobox" instead of "choice, haha, combobox". With a div,
-                   the accessible name comes solely from aria-labelledby. -->
-              <div
+              <!-- Trigger button that expands the popup. Not role=combobox: the sole
+                   combobox is the search input inside (avoids two comboboxes).
+                   While open, focus lives on the search combobox — hide this trigger
+                   from the a11y tree so AT does not offer a stale expanded button. -->
+              <button
+                type="button"
                 class="custom-select-display"
-                role="combobox"
-                tabindex="0"
-                aria-haspopup="listbox"
+                :tabindex="openDropdown === element.fieldName ? -1 : 0"
+                aria-haspopup="true"
                 :aria-expanded="openDropdown === element.fieldName"
-                :aria-controls="'listbox_' + element.fieldName"
+                :aria-controls="'dropdown_' + element.fieldName"
                 :id="'combo_' + element.fieldName"
                 :aria-labelledby="comboLabelledBy(element)"
                 :aria-describedby="comboDescribedBy(element)"
                 :aria-required="element.required ? 'true' : null"
                 :aria-invalid="errors[element.fieldName] ? 'true' : null"
+                :aria-hidden="openDropdown === element.fieldName ? 'true' : null"
                 @click="toggleDropdown(element.fieldName)"
                 @keydown="onSelectKeydown(element, $event)"
               >
@@ -288,8 +286,8 @@
                      aria-hidden: the value "read" for SR comes from aria-labelledby / describedby. -->
                 <span v-if="columnMetadata[element.fieldName]?.isMultiple" class="placeholder" aria-hidden="true">-- Sélectionner --</span>
                 <!-- Single-select: selected value (dark) or placeholder (gray).
-                     - The span has an id so it can be referenced by the combobox's
-                       aria-labelledby (SR reads "label, value, combobox").
+                     - The span has an id so it can be referenced by the trigger's
+                       aria-labelledby (SR reads "label, value, button").
                      - aria-hidden="true" prevents VoiceOver from navigating into the
                        span's text in web mode (otherwise the down arrow would focus
                        the placeholder's "--"). The ARIA spec allows aria-labelledby
@@ -302,24 +300,40 @@
                   aria-hidden="true"
                 >{{ formData[element.fieldName] ? getOptionLabel(element, formData[element.fieldName]) : '-- Sélectionner --' }}</span>
                 <span class="dropdown-arrow" aria-hidden="true">▼</span>
-              </div>
-              <div class="custom-select-dropdown" v-if="openDropdown === element.fieldName">
+              </button>
+              <!-- Popup controlled by the trigger (aria-controls). Includes the
+                   search combobox + listbox — not just the list. No role=dialog:
+                   that would re-announce the field name on open before the
+                   combobox; aria-expanded + aria-controls are enough here. -->
+              <div
+                class="custom-select-dropdown"
+                :id="'dropdown_' + element.fieldName"
+                v-if="openDropdown === element.fieldName"
+              >
                 <!-- Loading state while fetching ref data -->
                 <div v-if="loadingDropdown === element.fieldName" class="dropdown-loading" role="status">
                   Chargement...
                 </div>
-                <!-- Normal dropdown content.
-                     aria-activedescendant lives on the search input (the focused element),
-                     pointing to the currently highlighted option in the listbox below. -->
+                <!-- Normal dropdown content. Focus moves here on open: this input
+                     IS the editable combobox (W3C APG). aria-activedescendant is
+                     omitted until the user filters or arrows — otherwise many SRs
+                     skip the combobox announcement and only read the first option.
+                     Its aria-controls correctly targets only the listbox. -->
                 <template v-else>
                   <input
                     type="text"
                     class="search-input"
                     placeholder="Rechercher..."
-                    aria-label="Rechercher dans les options"
+                    role="combobox"
+                    aria-expanded="true"
+                    aria-haspopup="listbox"
                     aria-autocomplete="list"
                     :aria-controls="'listbox_' + element.fieldName"
                     :aria-activedescendant="activeOptionId(element)"
+                    :aria-labelledby="'label_' + element.fieldName"
+                    :aria-describedby="searchDescribedBy(element)"
+                    :aria-required="element.required ? 'true' : null"
+                    :aria-invalid="errors[element.fieldName] ? 'true' : null"
                     :ref="el => setSearchInputRef(element.fieldName, el)"
                     v-model="searchQuery[element.fieldName]"
                     @click.stop
