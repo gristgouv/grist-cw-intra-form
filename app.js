@@ -1154,7 +1154,12 @@ const app = createApp({
           }
         }
 
-        // Create new record by performing a direct call to Grist's REST API endpoint
+        // Create new record
+
+        // Before
+        // await grist.selectedTable.create({ fields });
+
+        // After
         const { baseUrl, token } = await grist.docApi.getAccessToken({ readOnly: false });
         const docId = await grist.docApi.getDocName();
         const tableId = await grist.selectedTable.getTableId();
@@ -1190,8 +1195,12 @@ const app = createApp({
 
           // Build HTML error message
           let errorMessage = `<b>${title}</b><br/><ul>`;
-          reasons.forEach(r => errorMessage += `<li>${r}</li>`);
+          reasons.forEach(r => {
+            const errorText = (typeof r === 'object' && r !== null) ? (r.text || r.message || JSON.stringify(r)) : r;
+            errorMessage += `<li>${errorText}</li>`;
+          });
           errorMessage += `</ul>`;
+
           if (typeof errorFetchApi.error === 'string') {
             errorMessage += `<br/> (<i>${errorFetchApi.error}</i>)`;
           }
