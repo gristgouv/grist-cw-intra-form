@@ -386,18 +386,48 @@ select[multiple] option:checked {
 }
 
 .form-error {
-  color: #d32f2f;
-  font-size: 14px;
-  margin-bottom: 12px;
-  padding: 12px;
-  background: #ffebee;
-  border-radius: 4px;
+  color: #c62828;
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  background: #fdf2f2;
+  border: 1px solid #f5c6cb;
+  border-left: 4px solid #d32f2f;
+  border-radius: 6px;
   display: none;
-  text-align: center;
+  text-align: left;
 }
 
 .form-error.show {
   display: block;
+}
+
+.form-error b {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 6px;
+  color: #b71c1c;
+}
+
+.form-error ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 8px 0;
+}
+
+.form-error li {
+  position: relative;
+  padding-left: 16px;
+  margin-bottom: 4px;
+}
+
+.form-error li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #d32f2f;
+  font-weight: bold;
 }
 
 .form-success {

@@ -415,7 +415,7 @@ const app = createApp({
           maxLength: null,
           conditional: null
         }));
-        
+
        // TODO : make it reactive instead
         await grist.setOptions({ initialized: true, formElements: toRaw(formElements.value) });
       } else {
@@ -651,7 +651,7 @@ const app = createApp({
     // -------------------------------------------------------------------------
 
     // Update active format states based on current selection
-    // The queryCommandState() is officially obsolete/deprecated but there's no alternative...(see execCommand) 
+    // The queryCommandState() is officially obsolete/deprecated but there's no alternative...(see execCommand)
     function updateActiveFormats() {
       activeFormats.bold = document.queryCommandState('bold');
       activeFormats.italic = document.queryCommandState('italic');
@@ -1154,8 +1154,52 @@ const app = createApp({
           }
         }
 
-        // Create new record
-        await grist.selectedTable.create({ fields });
+        // Create new record by performing a direct call to Grist's REST API endpoint
+        const { baseUrl, token } = await grist.docApi.getAccessToken({ readOnly: false });
+        const docId = await grist.docApi.getDocName();
+        const tableId = await grist.selectedTable.getTableId();
+        const urlObj = new URL(baseUrl);
+        const hostname = urlObj.hostname === '0.0.0.0' ? (window.location.hostname || 'localhost') : urlObj.hostname;
+        const port = urlObj.port ? `:${urlObj.port}` : '';
+        const apiRoot = `${urlObj.protocol}//${hostname}${port}/api`;
+        const apiEndpoint = `${apiRoot}/docs/${docId}/tables/${tableId}/records?auth=${token}`;
+
+        const response = await fetch(apiEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            records: [
+              { fields }
+            ]
+          })
+        });
+
+        if (!response.ok) {
+          const errorFetchApi = await response.json();
+          console.error("Grist Fetch API - Error creating new record:", errorFetchApi);
+
+          // Extract error details from Grist REST API response memos
+          const reasons = errorFetchApi.details?.memos?.length
+              ? errorFetchApi.details.memos
+              : [errorFetchApi.error || "Erreur lors de l'enregistrement !"];
+
+          // Format title based on the number of reasons errors
+          const title = reasons.length > 1 ? "Erreurs lors de l'enregistrement !" : "Erreur lors de l'enregistrement !";
+
+          // Build HTML error message
+          let errorMessage = `<b>${title}</b><br/><ul>`;
+          reasons.forEach(r => errorMessage += `<li>${r}</li>`);
+          errorMessage += `</ul>`;
+          if (typeof errorFetchApi.error === 'string') {
+            errorMessage += `<br/> (<i>${errorFetchApi.error}</i>)`;
+          }
+
+          // Update UI with sanitize HTML to prevent XSS vulnerabilities
+          formErrorMessage.value = DOMPurify.sanitize(errorMessage, sanitizeConfig);
+          return;
+        }
 
         // Show success message
         formSuccessMessage.value = 'Votre réponse a bien été enregistrée';
@@ -1176,7 +1220,7 @@ const app = createApp({
           }
         });
       } catch (error) {
-        formErrorMessage.value = 'Erreur : ' + error.message;
+        formErrorMessage.value = error.message;
       }
     }
 

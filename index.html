@@ -216,7 +216,7 @@
         </div>
       </template>
 
-      <div v-if="formErrorMessage" class="form-error show">{{ formErrorMessage }}</div>
+      <div v-if="formErrorMessage" class="form-error show" v-html="formErrorMessage"></div>
       <div v-if="formSuccessMessage" class="form-success show">{{ formSuccessMessage }}</div>
       <button class="btn" @click="submitForm">Valider</button>
     </div>
