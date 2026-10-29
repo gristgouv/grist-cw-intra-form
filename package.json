@@ -9,7 +9,7 @@
     "test:ui": "vitest --ui"
   },
   "devDependencies": {
-    "happy-dom": "^20.0.0",
+    "happy-dom": "^21.0.4",
     "vitest": "^4.0.0"
   }
 }
