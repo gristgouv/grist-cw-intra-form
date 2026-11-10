@@ -683,17 +683,85 @@ const app = createApp({
     // POPUP MANAGEMENT
     // -------------------------------------------------------------------------
 
-    // Close all popups and overlay
+    // Element that opened the current popup — restored on close so keyboard
+    // users land back on the control that triggered it.
+    let popupTriggerEl = null;
+
+    const FOCUSABLE_SELECTOR = [
+      'a[href]',
+      'button:not([disabled])',
+      'textarea:not([disabled])',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      '[contenteditable="true"]',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(', ');
+
+    function rememberPopupTrigger() {
+      popupTriggerEl = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    }
+
+    function restorePopupFocus() {
+      const el = popupTriggerEl;
+      popupTriggerEl = null;
+      if (el && document.contains(el)) {
+        nextTick(() => el.focus());
+      }
+    }
+
+    // Move focus into a newly shown dialog (preferred control, else first focusable).
+    async function focusPopup(rootSelector, preferredSelector) {
+      await nextTick();
+      const root = document.querySelector(rootSelector);
+      if (!root) return;
+      const preferred = preferredSelector && root.querySelector(preferredSelector);
+      const first = preferred || root.querySelector(FOCUSABLE_SELECTOR);
+      (first || root).focus();
+    }
+
+    // Escape closes; Tab cycles within the dialog (focus trap).
+    function onFilterPopupKeydown(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeAllPopups();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const root = e.currentTarget;
+      const focusables = [...root.querySelectorAll(FOCUSABLE_SELECTOR)];
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
+    // Close all popups and overlay; restore focus to the trigger when one was open.
     function closeAllPopups() {
+      const hadPopup = editPopup.show
+        || conditionalPopup.show
+        || validationPopup.show
+        || refDropdownFilterPopup.show;
       showOverlay.value = false;
       editPopup.show = false;
       conditionalPopup.show = false;
       validationPopup.show = false;
       refDropdownFilterPopup.show = false;
+      colorPicker.show = false;
+      emojiPicker.show = false;
+      if (hadPopup) restorePopupFocus();
     }
 
     // Show edit popup for field label
-    function editLabel(index) {
+    async function editLabel(index) {
+      rememberPopupTrigger();
       const el = formElements.value[index];
       editPopup.title = 'Modifier le libellé';
       editPopup.value = el.fieldLabel || el.fieldName;
@@ -701,10 +769,12 @@ const app = createApp({
       editPopup.property = 'fieldLabel';
       editPopup.show = true;
       showOverlay.value = true;
+      await focusPopup('#edit-popup', '.rich-editor-content');
     }
 
     // Show edit popup for text content
-    function editContent(index) {
+    async function editContent(index) {
+      rememberPopupTrigger();
       const el = formElements.value[index];
       editPopup.title = 'Modifier le contenu';
       editPopup.value = el.content || '';
@@ -712,6 +782,7 @@ const app = createApp({
       editPopup.property = 'content';
       editPopup.show = true;
       showOverlay.value = true;
+      await focusPopup('#edit-popup', '.rich-editor-content');
     }
 
     // Save edit popup changes (kept for compatibility)
@@ -720,8 +791,7 @@ const app = createApp({
         formElements.value[editPopup.index][editPopup.property] = editPopup.value;
         await saveConfiguration();
       }
-      editPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // -------------------------------------------------------------------------
@@ -856,10 +926,7 @@ const app = createApp({
 
     // Close edit popup
     function closeEditPopup() {
-      editPopup.show = false;
-      showOverlay.value = false;
-      colorPicker.show = false;
-      emojiPicker.show = false;
+      closeAllPopups();
     }
 
     // Save rich editor content
@@ -880,6 +947,7 @@ const app = createApp({
 
     // Show popup to configure conditional display rules for a field
     async function showConditionalPopup(index) {
+      rememberPopupTrigger();
       const el = formElements.value[index];
       conditionalPopup.index = index;
       conditionalPopup.tooManyValues = false;
@@ -902,6 +970,7 @@ const app = createApp({
 
       conditionalPopup.show = true;
       showOverlay.value = true;
+      await focusPopup('#conditional-popup');
     }
 
     // Max values allowed in the conditional popup. The admin popup uses the native
@@ -954,16 +1023,14 @@ const app = createApp({
         formElements.value[conditionalPopup.index].conditional = null;
       }
       await saveConfiguration();
-      conditionalPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // Remove the conditional rule from this field
     async function deleteConditional() {
       formElements.value[conditionalPopup.index].conditional = null;
       await saveConfiguration();
-      conditionalPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // -------------------------------------------------------------------------
@@ -1000,13 +1067,15 @@ const app = createApp({
     // -------------------------------------------------------------------------
 
     // Show popup to configure maxLength validation
-    function showValidationPopup(index) {
+    async function showValidationPopup(index) {
+      rememberPopupTrigger();
       const el = formElements.value[index];
       validationPopup.index = index;
       validationPopup.hasExisting = el.maxLength !== null && el.maxLength !== undefined;
       validationPopup.maxLength = el.maxLength || '';
       validationPopup.show = true;
       showOverlay.value = true;
+      await focusPopup('#validation-popup');
     }
 
     // Save maxLength validation
@@ -1014,16 +1083,14 @@ const app = createApp({
       const maxLength = validationPopup.maxLength;
       formElements.value[validationPopup.index].maxLength = maxLength ? parseInt(maxLength) : null;
       await saveConfiguration();
-      validationPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // Remove maxLength validation
     async function deleteValidation() {
       formElements.value[validationPopup.index].maxLength = null;
       await saveConfiguration();
-      validationPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // -------------------------------------------------------------------------
@@ -1065,6 +1132,7 @@ const app = createApp({
       // of getColumnMetadata), but guards against malformed types like "Ref:".
       if (!meta?.isRef || !meta.refTableName) return;
 
+      rememberPopupTrigger();
       refDropdownFilterPopup.index = index;
       refDropdownFilterPopup.hasExisting = !!element.refDropdownFilter;
 
@@ -1117,6 +1185,7 @@ const app = createApp({
 
       refDropdownFilterPopup.show = true;
       showOverlay.value = true;
+      await focusPopup('#ref-dropdown-filter-popup');
     }
 
     // Called when user selects a filter-by field in the ref filter popup.
@@ -1178,16 +1247,14 @@ const app = createApp({
         formElements.value[refDropdownFilterPopup.index].refDropdownFilter = null;
       }
       await saveConfiguration();
-      refDropdownFilterPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // Remove the ref filter from this field
     async function deleteRefDropdownFilter() {
       formElements.value[refDropdownFilterPopup.index].refDropdownFilter = null;
       await saveConfiguration();
-      refDropdownFilterPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // -------------------------------------------------------------------------
@@ -1941,6 +2008,7 @@ const app = createApp({
       onDragOver,
       onDrop,
       closeAllPopups,
+      onFilterPopupKeydown,
       editLabel,
       editContent,
       saveEdit,

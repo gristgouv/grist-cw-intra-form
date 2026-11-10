@@ -440,8 +440,18 @@
     </div>
 
     <!-- Popup d'edition de texte riche -->
-    <div v-if="editPopup.show" class="edit-popup rich-editor" @click="closePickersOnClickOutside($event)">
-      <h3>{{ editPopup.title }}</h3>
+    <div
+      v-if="editPopup.show"
+      id="edit-popup"
+      class="edit-popup rich-editor"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-popup-title"
+      tabindex="-1"
+      @keydown="onFilterPopupKeydown"
+      @click="closePickersOnClickOutside($event)"
+    >
+      <h3 id="edit-popup-title">{{ editPopup.title }}</h3>
       <div class="editor-toolbar">
         <button type="button" class="toolbar-btn" :class="{ active: activeFormats.bold }" @click="execCmd('bold')" title="Gras (Ctrl+B)"><strong>B</strong></button>
         <button type="button" class="toolbar-btn" :class="{ active: activeFormats.italic }" @click="execCmd('italic')" title="Italique (Ctrl+I)"><em>I</em></button>
@@ -489,14 +499,23 @@
         v-html="editPopup.value"
       ></div>
       <div class="edit-popup-buttons">
-        <button class="cancel" @click="closeEditPopup">Annuler</button>
-        <button class="save" @click="saveRichEdit">Enregistrer</button>
+        <button type="button" class="cancel" @click="closeEditPopup">Annuler</button>
+        <button type="button" class="save" @click="saveRichEdit">Enregistrer</button>
       </div>
     </div>
 
     <!-- Popup de condition -->
-    <div v-if="conditionalPopup.show" class="filter-popup">
-      <h3>Affichage conditionnel</h3>
+    <div
+      v-if="conditionalPopup.show"
+      id="conditional-popup"
+      class="filter-popup"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="conditional-popup-title"
+      tabindex="-1"
+      @keydown="onFilterPopupKeydown"
+    >
+      <h3 id="conditional-popup-title">Affichage conditionnel</h3>
       <div class="filter-row">
         <label>Ce champ est affiché si :</label>
       </div>
@@ -522,31 +541,49 @@
         </select>
       </div>
       <div class="filter-popup-buttons">
-        <button v-if="conditionalPopup.hasExisting" class="delete" @click="deleteConditional">Supprimer</button>
+        <button type="button" v-if="conditionalPopup.hasExisting" class="delete" @click="deleteConditional">Supprimer</button>
         <div style="display: flex; gap: 8px;">
-          <button class="cancel" @click="conditionalPopup.show = false; showOverlay = false">Annuler</button>
-          <button class="save" @click="saveConditional">Enregistrer</button>
+          <button type="button" class="cancel" @click="closeAllPopups">Annuler</button>
+          <button type="button" class="save" @click="saveConditional">Enregistrer</button>
         </div>
       </div>
     </div>
 
     <!-- Popup de validation (maxLength) -->
-    <div v-if="validationPopup.show" class="validation-popup">
-      <h3>Validation du champ</h3>
-      <label>Nombre max de caractères :</label>
-      <input type="number" v-model="validationPopup.maxLength" min="1">
+    <div
+      v-if="validationPopup.show"
+      id="validation-popup"
+      class="validation-popup"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="validation-popup-title"
+      tabindex="-1"
+      @keydown="onFilterPopupKeydown"
+    >
+      <h3 id="validation-popup-title">Validation du champ</h3>
+      <label for="validation-max-length">Nombre max de caractères :</label>
+      <input id="validation-max-length" type="number" v-model="validationPopup.maxLength" min="1">
       <div class="validation-popup-buttons">
-        <button v-if="validationPopup.hasExisting" class="delete" @click="deleteValidation">Supprimer</button>
+        <button type="button" v-if="validationPopup.hasExisting" class="delete" @click="deleteValidation">Supprimer</button>
         <div style="display: flex; gap: 8px;">
-          <button class="cancel" @click="validationPopup.show = false; showOverlay = false">Annuler</button>
-          <button class="save" @click="saveValidation">Enregistrer</button>
+          <button type="button" class="cancel" @click="closeAllPopups">Annuler</button>
+          <button type="button" class="save" @click="saveValidation">Enregistrer</button>
         </div>
       </div>
     </div>
 
     <!-- Dropdown filter popup (Ref/RefList) -->
-    <div v-if="refDropdownFilterPopup.show" class="filter-popup">
-      <h3>Filtre sur liste déroulante</h3>
+    <div
+      v-if="refDropdownFilterPopup.show"
+      id="ref-dropdown-filter-popup"
+      class="filter-popup"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ref-dropdown-filter-popup-title"
+      tabindex="-1"
+      @keydown="onFilterPopupKeydown"
+    >
+      <h3 id="ref-dropdown-filter-popup-title">Filtre sur liste déroulante</h3>
       <div class="filter-row">
         <label>Filtrer cette colonne par rapport à :</label>
       </div>
@@ -563,10 +600,10 @@
         <div class="ref-filter-no-fields">Aucun champ de référence compatible dans le formulaire.</div>
       </div>
       <div class="filter-popup-buttons">
-        <button v-if="refDropdownFilterPopup.hasExisting" class="delete" @click="deleteRefDropdownFilter">Supprimer</button>
+        <button type="button" v-if="refDropdownFilterPopup.hasExisting" class="delete" @click="deleteRefDropdownFilter">Supprimer</button>
         <div style="display: flex; gap: 8px;">
-          <button class="cancel" @click="refDropdownFilterPopup.show = false; showOverlay = false">Annuler</button>
-          <button class="save" @click="saveRefDropdownFilter">Enregistrer</button>
+          <button type="button" class="cancel" @click="closeAllPopups">Annuler</button>
+          <button type="button" class="save" @click="saveRefDropdownFilter">Enregistrer</button>
         </div>
       </div>
     </div>

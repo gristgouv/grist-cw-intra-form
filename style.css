@@ -349,13 +349,6 @@ textarea {
   min-height: 100px;
 }
 
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: #2383e2;
-}
-
 input[type="checkbox"] {
   width: auto;
   margin: 0;
