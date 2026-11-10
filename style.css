@@ -184,6 +184,7 @@ body {
 .element-content-wrapper {
   flex: 1;
   min-width: 0;
+  align-self: center;
 }
 
 .element-preview {
@@ -234,7 +235,6 @@ body {
   gap: 6px;
   flex-shrink: 0;
   align-items: flex-start;
-  padding-top: 6px;
 }
 
 .element-controls button,
@@ -653,10 +653,16 @@ select[multiple] option:checked {
   border-radius: var(--grist-theme-control-border-radius, 4px);
   display: none;
   text-align: center;
+  outline: none;
 }
 
 .form-success.show {
   display: block;
+}
+
+.form-success:focus-visible {
+  outline: 2px solid var(--grist-theme-primary, #2383e2);
+  outline-offset: 2px;
 }
 
 .required-info {
@@ -674,7 +680,7 @@ select[multiple] option:checked {
   background: var(--grist-theme-control-primary-bg, #2383e2);
   color: var(--grist-theme-control-primary-fg, white);
   border: none;
-  padding: 6px 10px;
+  padding: 8px 10px;
   font-size: var(--grist-theme-intro-font-size, 14px);
   font-weight: 500;
   border-radius: var(--grist-theme-control-border-radius, 4px);
@@ -690,6 +696,15 @@ select[multiple] option:checked {
 
 .btn:active {
   transform: translateY(1px);
+}
+
+.btn-secondary {
+  background: var(--grist-theme-decoration-secondary, #f0f0f0);
+  color: var(--grist-theme-text, #37352f);
+}
+
+.btn-secondary:hover {
+  background: var(--grist-theme-decoration, #e0e0e0);
 }
 
 /* -----------------------------------------------------------------------------

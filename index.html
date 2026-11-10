@@ -168,6 +168,15 @@
 
     <!-- Formulaire principal -->
     <div class="container" :style="containerStyle">
+      <template v-if="formSuccessMessage">
+        <div
+          ref="successMessageEl"
+          class="form-success show"
+          tabindex="-1"
+        >{{ formSuccessMessage }}</div>
+        <button type="button" class="btn btn-secondary" @click="showFormAgain">Retour au formulaire</button>
+      </template>
+      <template v-else>
       <template v-for="element in formElements" :key="element._uid">
         <!-- Séparateur -->
         <div v-if="element.type === 'separator'" class="separator"></div>
@@ -473,10 +482,11 @@
 
       <!-- form-error is for non-validation errors (network, server). Field validation
            focuses the first invalid control instead; per-field errors are announced
-           via aria-describedby when focus lands. Success stays polite. -->
+           via aria-describedby when focus lands. On success the form is replaced by
+           a focusable message + "Retour au formulaire". -->
       <div v-if="formErrorMessage" role="alert" class="form-error show">{{ formErrorMessage }}</div>
-      <div v-if="formSuccessMessage" role="status" class="form-success show">{{ formSuccessMessage }}</div>
-      <button class="btn" @click="submitForm">Valider</button>
+      <button type="button" class="btn" @click="submitForm">Valider</button>
+      </template>
     </div>
 
     <!-- Popup d'edition de texte riche -->

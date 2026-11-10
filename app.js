@@ -138,6 +138,7 @@ const app = createApp({
     // Messages
     const formErrorMessage = ref('');     // Global form error message
     const formSuccessMessage = ref('');   // Success message after submission
+    const successMessageEl = ref(null);   // Focus target after successful submit
 
     // Add element panel state
     const newElementType = ref('');       // Selected type for new element
@@ -1946,13 +1947,7 @@ const app = createApp({
         // Create new record
         await grist.selectedTable.create({ fields });
 
-        // Show success message
-        formSuccessMessage.value = 'Votre réponse a bien été enregistrée';
-        setTimeout(() => {
-          formSuccessMessage.value = '';
-        }, 3000);
-
-        // Reset form: clear all inputs based on their type
+        // Reset form so "Retour au formulaire" opens a blank form again
         formElements.value.forEach(el => {
           if (el.type === 'field') {
             const meta = columnMetadata.value[el.fieldName];
@@ -1964,9 +1959,19 @@ const app = createApp({
             }
           }
         });
+
+        // Replace the form with a focusable success message (no auto-hide)
+        formSuccessMessage.value = 'Votre réponse a bien été enregistrée';
+        await nextTick();
+        successMessageEl.value?.focus();
       } catch (error) {
         formErrorMessage.value = 'Erreur : ' + error.message;
       }
+    }
+
+    // Leave the success screen and show the (already reset) form again
+    function showFormAgain() {
+      formSuccessMessage.value = '';
     }
 
     // -------------------------------------------------------------------------
@@ -1987,6 +1992,7 @@ const app = createApp({
       globalPadding,
       formErrorMessage,
       formSuccessMessage,
+      successMessageEl,
       newElementType,
       selectedColumn,
       newElementContent,
@@ -2085,7 +2091,8 @@ const app = createApp({
       isOptionSelected,
       selectOption,
       removeSelection,
-      submitForm
+      submitForm,
+      showFormAgain
     };
   }
 });
