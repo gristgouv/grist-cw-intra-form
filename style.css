@@ -236,8 +236,7 @@ body {
   align-items: flex-start;
 }
 
-.element-controls button,
-.element-controls .icon-btn {
+.element-controls button {
   background: var(--grist-theme-bg-default, #fff);
   border: 1px solid var(--grist-theme-decoration, #e0e0e0);
   cursor: pointer;
@@ -245,25 +244,36 @@ body {
   padding: 10px;
   border-radius: var(--grist-theme-control-border-radius, 4px);
   color: var(--grist-theme-text, inherit);
-  transition: all 0.2s;
+  transition: background 0.2s;
   line-height: 1;
 }
 
-.element-controls button:not(.active):hover,
-.element-controls .icon-btn:not(.active):hover {
+.element-controls button:hover {
   background: var(--grist-theme-hover-light, #f0f0f0);
 }
 
-.icon-btn.active {
-  background: var(--grist-theme-control-primary-bg, #2383e2);
-  color: var(--grist-theme-control-primary-fg, white);
-  border-color: var(--grist-theme-primary, #2383e2);
+/* Pressable icon buttons: same outer size as non-pressable (padding 10px
+   around a 13px icon). The 2px outer padding is the gap to the inner face;
+   the inner keeps a 1px transparent border + 7px padding so totals match. */
+.element-controls .icon-btn:has(> .icon-btn-inner) {
+  padding: 3px;
 }
 
-.icon-btn.active:hover {
-  background: var(--grist-theme-control-primary-hover-bg, #1a6bb8);
-  color: var(--grist-theme-control-primary-fg, white);
-  border-color: var(--grist-theme-primary-muted, #1a6bb8);
+.icon-btn-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+/* Pressed state styles the inner face only (Grist buttonSelect selected). */
+.icon-btn.active > .icon-btn-inner {
+  background: var(--grist-theme-button-group-selected-bg, #e8f0fe);
+  border-color: var(--grist-theme-button-group-selected-border, #2383e2);
+  color: var(--grist-theme-button-group-selected-border, #2383e2);
 }
 
 /* -----------------------------------------------------------------------------

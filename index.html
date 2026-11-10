@@ -95,32 +95,42 @@
               <template v-if="element.type === 'field'">
                 <!-- boutons spécifique au type de champ -->
                 <button v-if="isPureTextField(element)" type="button" class="icon-btn" :class="{ active: element.multiline }" @click="toggleMultiline(index)" aria-label="Multiligne" title="Multiligne" :aria-pressed="element.multiline ? 'true' : 'false'" style="margin-inline: 8px;">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M2 12.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5m0-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5m0-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5m0-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5"/>
-                  </svg>
+                  <span class="icon-btn-inner">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M2 12.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5m0-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5m0-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5m0-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5"/>
+                    </svg>
+                  </span>
                 </button>
                 <button v-if="isRefField(element)" type="button" class="icon-btn" :class="{ active: element.refDropdownFilter }" @click="showRefDropdownFilterPopup(index)" aria-label="Filtre liste déroulante" title="Filtre liste déroulante" style="margin-inline: 8px;">
-                  <svg width="13" height="13" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true">
-                    <path d="M5.8535534 10.8535534c-.1952622.1952621-.5118446.1952621-.7071068 0-.1952621-.1952622-.1952621-.5118446 0-.7071068l5-5c.1952622-.1952621.5118446-.1952621.7071068 0 .1952621.1952622.1952621.5118446 0 .7071068zm1.5-5.5c-.1952622.1952621-.5118446.1952621-.7071068 0-.1952621-.1952622-.1952621-.5118446 0-.7071068L8.3185182 2.974375c1.2999462-1.2994199 3.4070174-1.2994199 4.7071068.0001432 1.2994199 1.2999463 1.2994199 3.4070174-.0000716 4.7070352l-1.672 1.672c-.1952622.1952621-.5118446.1952621-.7071068 0-.1952621-.1952622-.1952621-.5118446 0-.7071068l1.6719284-1.6719284c.9090865-.9094547.9090865-2.3835817.0001432-3.2928932-.9094547-.9090865-2.3835817-.9090865-3.2929648-.0000716zM4.6464466 6.6464466c.1952622-.1952621.5118446-.1952621.7071068 0 .1952621.1952622.1952621.5118446 0 .7071068L3.681625 9.0254818c-.9090865.9094547-.9090865 2.3835817-.0001432 3.2928932.9094547.9090865 2.3835817.9090865 3.2929648.0000716l1.672-1.672c.1952622-.1952621.5118446-.1952621.7071068 0 .1952621.1952622.1952621.5118446 0 .7071068L7.6814818 13.025625c-1.2999463 1.2994199-3.4070173 1.2994199-4.7071068-.0001432-1.2994199-1.2999462-1.2994199-3.4070173.0000716-4.7070352z"/>
-                  </svg>
+                  <span class="icon-btn-inner">
+                    <svg width="13" height="13" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true">
+                      <path d="M5.8535534 10.8535534c-.1952622.1952621-.5118446.1952621-.7071068 0-.1952621-.1952622-.1952621-.5118446 0-.7071068l5-5c.1952622-.1952621.5118446-.1952621.7071068 0 .1952621.1952622.1952621.5118446 0 .7071068zm1.5-5.5c-.1952622.1952621-.5118446.1952621-.7071068 0-.1952621-.1952622-.1952621-.5118446 0-.7071068L8.3185182 2.974375c1.2999462-1.2994199 3.4070174-1.2994199 4.7071068.0001432 1.2994199 1.2999463 1.2994199 3.4070174-.0000716 4.7070352l-1.672 1.672c-.1952622.1952621-.5118446.1952621-.7071068 0-.1952621-.1952622-.1952621-.5118446 0-.7071068l1.6719284-1.6719284c.9090865-.9094547.9090865-2.3835817.0001432-3.2928932-.9094547-.9090865-2.3835817-.9090865-3.2929648-.0000716zM4.6464466 6.6464466c.1952622-.1952621.5118446-.1952621.7071068 0 .1952621.1952622.1952621.5118446 0 .7071068L3.681625 9.0254818c-.9090865.9094547-.9090865 2.3835817-.0001432 3.2928932.9094547.9090865 2.3835817.9090865 3.2929648.0000716l1.672-1.672c.1952622-.1952621.5118446-.1952621.7071068 0 .1952621.1952622.1952621.5118446 0 .7071068L7.6814818 13.025625c-1.2999463 1.2994199-3.4070173 1.2994199-4.7071068-.0001432-1.2994199-1.2999462-1.2994199-3.4070173.0000716-4.7070352z"/>
+                    </svg>
+                  </span>
                 </button>
 
                 <button type="button" class="icon-btn" :class="{ active: element.required }" @click="toggleRequired(index)" aria-label="Rendre obligatoire" title="Rendre obligatoire" :aria-pressed="element.required ? 'true' : 'false'">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" aria-hidden="true" viewBox="0 0 16 16">
-                    <path d="M8 0a1 1 0 0 1 1 1v5.268l4.562-2.634a1 1 0 1 1 1 1.732L10 8l4.562 2.634a1 1 0 1 1-1 1.732L9 9.732V15a1 1 0 1 1-2 0V9.732l-4.562 2.634a1 1 0 1 1-1-1.732L6 8 1.438 5.366a1 1 0 0 1 1-1.732L7 6.268V1a1 1 0 0 1 1-1"/>
-                  </svg>
+                  <span class="icon-btn-inner">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" aria-hidden="true" viewBox="0 0 16 16">
+                      <path d="M8 0a1 1 0 0 1 1 1v5.268l4.562-2.634a1 1 0 1 1 1 1.732L10 8l4.562 2.634a1 1 0 1 1-1 1.732L9 9.732V15a1 1 0 1 1-2 0V9.732l-4.562 2.634a1 1 0 1 1-1-1.732L6 8 1.438 5.366a1 1 0 0 1 1-1.732L7 6.268V1a1 1 0 0 1 1-1"/>
+                    </svg>
+                  </span>
                 </button>
 
                 <button v-if="isTextOrNumericField(element)" type="button" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" aria-label="Définir un nombre de caractères maximum" title="Définir un nombre de caractères maximum">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425z"/>
-                  </svg>
+                  <span class="icon-btn-inner">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425z"/>
+                    </svg>
+                  </span>
                 </button>
 
                 <button type="button" style="margin-inline: 8px;" class="icon-btn" :class="{ active: element.conditional }" @click="showConditionalPopup(index)" aria-label="Rendre conditionnel" title="Rendre conditionnel">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M5.52.359A.5.5 0 0 1 6 0h4a.5.5 0 0 1 .474.658L8.694 6H12.5a.5.5 0 0 1 .395.807l-7 9a.5.5 0 0 1-.873-.454L6.823 9.5H3.5a.5.5 0 0 1-.48-.641zM6.374 1 4.168 8.5H7.5a.5.5 0 0 1 .478.647L6.78 13.04 11.478 7H8a.5.5 0 0 1-.474-.658L9.306 1z"/>
-                  </svg>
+                  <span class="icon-btn-inner">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M5.52.359A.5.5 0 0 1 6 0h4a.5.5 0 0 1 .474.658L8.694 6H12.5a.5.5 0 0 1 .395.807l-7 9a.5.5 0 0 1-.873-.454L6.823 9.5H3.5a.5.5 0 0 1-.48-.641zM6.374 1 4.168 8.5H7.5a.5.5 0 0 1 .478.647L6.78 13.04 11.478 7H8a.5.5 0 0 1-.474-.658L9.306 1z"/>
+                    </svg>
+                  </span>
                 </button>
 
                 <button type="button" class="icon-btn" @click="editLabel(index)" aria-label="Modifier le libellé" title="Modifier le libellé">
