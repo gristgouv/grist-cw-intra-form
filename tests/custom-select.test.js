@@ -76,7 +76,32 @@ describe('ref-dropdown filter', () => {
     expect(src).toContain('refDropdownFilterPopup');
   });
 
-  it('renders the 🔗 (chain) icon in the config modal', () => {
-    expect(html).toContain('&#128279;');
+  it('renders the ref-dropdown filter button in the config modal', () => {
+    expect(html).toMatch(
+      /@click="showRefDropdownFilterPopup\(index\)"[\s\S]*?<svg[\s\S]*?<\/svg>/
+    );
+  });
+});
+
+describe('filter-popup — modal behaviour', () => {
+  const html = read('index.html');
+  const src = read('app.js');
+
+  it('marks filter popups as aria-modal dialogs', () => {
+    expect(html).toMatch(/id="conditional-popup"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"/);
+    expect(html).toMatch(/id="ref-dropdown-filter-popup"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"/);
+    expect(html).toMatch(/id="validation-popup"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"/);
+    expect(html).toMatch(/id="edit-popup"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"/);
+  });
+
+  it('moves focus into the popup on open and restores it on close', () => {
+    expect(src).toMatch(/function rememberPopupTrigger/);
+    expect(src).toMatch(/function restorePopupFocus/);
+    expect(src).toMatch(/function focusPopup/);
+    expect(src).toMatch(/function onFilterPopupKeydown/);
+    expect(src).toContain("focusPopup('#conditional-popup')");
+    expect(src).toContain("focusPopup('#ref-dropdown-filter-popup')");
+    expect(src).toContain("focusPopup('#validation-popup')");
+    expect(src).toContain("focusPopup('#edit-popup', '.rich-editor-content')");
   });
 });

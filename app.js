@@ -47,6 +47,11 @@ const app = createApp({
     // ATTACHMENT HANDLING
     // -------------------------------------------------------------------------
 
+    // Limits shown as help text and enforced on select.
+    const ATTACHMENT_MAX_FILES = 3;
+    const ATTACHMENT_MAX_SIZE_MB = 10;
+    const ATTACHMENT_MAX_SIZE = ATTACHMENT_MAX_SIZE_MB * 1024 * 1024;
+
     // Format file size in human-readable format (bytes, Ko, Mo)
     function formatFileSize(bytes) {
       if (bytes < 1024) return bytes + ' o';
@@ -62,21 +67,19 @@ const app = createApp({
     // Handle file selection
     function onFileSelect(col, event) {
       const files = Array.from(event.target.files);
-      const maxSize = 10 * 1024 * 1024; // 10 MB
-      const maxFiles = 3;
 
       if (!pendingAttachments[col]) {
         pendingAttachments[col] = [];
       }
 
       files.forEach(file => {
-        if (pendingAttachments[col].length >= maxFiles) {
-          errors[col] = `Maximum ${maxFiles} pièces jointes par champ`;
+        if (pendingAttachments[col].length >= ATTACHMENT_MAX_FILES) {
+          errors[col] = `Maximum ${ATTACHMENT_MAX_FILES} pièces jointes par champ`;
           return;
         }
 
-        if (file.size > maxSize) {
-          errors[col] = `Le fichier "${file.name}" dépasse 10 Mo`;
+        if (file.size > ATTACHMENT_MAX_SIZE) {
+          errors[col] = `Le fichier "${file.name}" dépasse ${ATTACHMENT_MAX_SIZE_MB} Mo`;
           return;
         }
 
@@ -138,6 +141,7 @@ const app = createApp({
     // Messages
     const formErrorMessage = ref('');     // Global form error message
     const formSuccessMessage = ref('');   // Success message after submission
+    const successMessageEl = ref(null);   // Focus target after successful submit
 
     // Add element panel state
     const newElementType = ref('');       // Selected type for new element
@@ -683,17 +687,85 @@ const app = createApp({
     // POPUP MANAGEMENT
     // -------------------------------------------------------------------------
 
-    // Close all popups and overlay
+    // Element that opened the current popup — restored on close so keyboard
+    // users land back on the control that triggered it.
+    let popupTriggerEl = null;
+
+    const FOCUSABLE_SELECTOR = [
+      'a[href]',
+      'button:not([disabled])',
+      'textarea:not([disabled])',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      '[contenteditable="true"]',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(', ');
+
+    function rememberPopupTrigger() {
+      popupTriggerEl = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    }
+
+    function restorePopupFocus() {
+      const el = popupTriggerEl;
+      popupTriggerEl = null;
+      if (el && document.contains(el)) {
+        nextTick(() => el.focus());
+      }
+    }
+
+    // Move focus into a newly shown dialog (preferred control, else first focusable).
+    async function focusPopup(rootSelector, preferredSelector) {
+      await nextTick();
+      const root = document.querySelector(rootSelector);
+      if (!root) return;
+      const preferred = preferredSelector && root.querySelector(preferredSelector);
+      const first = preferred || root.querySelector(FOCUSABLE_SELECTOR);
+      (first || root).focus();
+    }
+
+    // Escape closes; Tab cycles within the dialog (focus trap).
+    function onFilterPopupKeydown(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeAllPopups();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const root = e.currentTarget;
+      const focusables = [...root.querySelectorAll(FOCUSABLE_SELECTOR)];
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
+    // Close all popups and overlay; restore focus to the trigger when one was open.
     function closeAllPopups() {
+      const hadPopup = editPopup.show
+        || conditionalPopup.show
+        || validationPopup.show
+        || refDropdownFilterPopup.show;
       showOverlay.value = false;
       editPopup.show = false;
       conditionalPopup.show = false;
       validationPopup.show = false;
       refDropdownFilterPopup.show = false;
+      colorPicker.show = false;
+      emojiPicker.show = false;
+      if (hadPopup) restorePopupFocus();
     }
 
     // Show edit popup for field label
-    function editLabel(index) {
+    async function editLabel(index) {
+      rememberPopupTrigger();
       const el = formElements.value[index];
       editPopup.title = 'Modifier le libellé';
       editPopup.value = el.fieldLabel || el.fieldName;
@@ -701,10 +773,12 @@ const app = createApp({
       editPopup.property = 'fieldLabel';
       editPopup.show = true;
       showOverlay.value = true;
+      await focusPopup('#edit-popup', '.rich-editor-content');
     }
 
     // Show edit popup for text content
-    function editContent(index) {
+    async function editContent(index) {
+      rememberPopupTrigger();
       const el = formElements.value[index];
       editPopup.title = 'Modifier le contenu';
       editPopup.value = el.content || '';
@@ -712,6 +786,7 @@ const app = createApp({
       editPopup.property = 'content';
       editPopup.show = true;
       showOverlay.value = true;
+      await focusPopup('#edit-popup', '.rich-editor-content');
     }
 
     // Save edit popup changes (kept for compatibility)
@@ -720,8 +795,7 @@ const app = createApp({
         formElements.value[editPopup.index][editPopup.property] = editPopup.value;
         await saveConfiguration();
       }
-      editPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // -------------------------------------------------------------------------
@@ -856,10 +930,7 @@ const app = createApp({
 
     // Close edit popup
     function closeEditPopup() {
-      editPopup.show = false;
-      showOverlay.value = false;
-      colorPicker.show = false;
-      emojiPicker.show = false;
+      closeAllPopups();
     }
 
     // Save rich editor content
@@ -880,6 +951,7 @@ const app = createApp({
 
     // Show popup to configure conditional display rules for a field
     async function showConditionalPopup(index) {
+      rememberPopupTrigger();
       const el = formElements.value[index];
       conditionalPopup.index = index;
       conditionalPopup.tooManyValues = false;
@@ -902,6 +974,7 @@ const app = createApp({
 
       conditionalPopup.show = true;
       showOverlay.value = true;
+      await focusPopup('#conditional-popup');
     }
 
     // Max values allowed in the conditional popup. The admin popup uses the native
@@ -954,16 +1027,14 @@ const app = createApp({
         formElements.value[conditionalPopup.index].conditional = null;
       }
       await saveConfiguration();
-      conditionalPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // Remove the conditional rule from this field
     async function deleteConditional() {
       formElements.value[conditionalPopup.index].conditional = null;
       await saveConfiguration();
-      conditionalPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // -------------------------------------------------------------------------
@@ -1000,13 +1071,15 @@ const app = createApp({
     // -------------------------------------------------------------------------
 
     // Show popup to configure maxLength validation
-    function showValidationPopup(index) {
+    async function showValidationPopup(index) {
+      rememberPopupTrigger();
       const el = formElements.value[index];
       validationPopup.index = index;
       validationPopup.hasExisting = el.maxLength !== null && el.maxLength !== undefined;
       validationPopup.maxLength = el.maxLength || '';
       validationPopup.show = true;
       showOverlay.value = true;
+      await focusPopup('#validation-popup');
     }
 
     // Save maxLength validation
@@ -1014,16 +1087,14 @@ const app = createApp({
       const maxLength = validationPopup.maxLength;
       formElements.value[validationPopup.index].maxLength = maxLength ? parseInt(maxLength) : null;
       await saveConfiguration();
-      validationPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // Remove maxLength validation
     async function deleteValidation() {
       formElements.value[validationPopup.index].maxLength = null;
       await saveConfiguration();
-      validationPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // -------------------------------------------------------------------------
@@ -1065,6 +1136,7 @@ const app = createApp({
       // of getColumnMetadata), but guards against malformed types like "Ref:".
       if (!meta?.isRef || !meta.refTableName) return;
 
+      rememberPopupTrigger();
       refDropdownFilterPopup.index = index;
       refDropdownFilterPopup.hasExisting = !!element.refDropdownFilter;
 
@@ -1117,6 +1189,7 @@ const app = createApp({
 
       refDropdownFilterPopup.show = true;
       showOverlay.value = true;
+      await focusPopup('#ref-dropdown-filter-popup');
     }
 
     // Called when user selects a filter-by field in the ref filter popup.
@@ -1178,16 +1251,14 @@ const app = createApp({
         formElements.value[refDropdownFilterPopup.index].refDropdownFilter = null;
       }
       await saveConfiguration();
-      refDropdownFilterPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // Remove the ref filter from this field
     async function deleteRefDropdownFilter() {
       formElements.value[refDropdownFilterPopup.index].refDropdownFilter = null;
       await saveConfiguration();
-      refDropdownFilterPopup.show = false;
-      showOverlay.value = false;
+      closeAllPopups();
     }
 
     // -------------------------------------------------------------------------
@@ -1236,7 +1307,7 @@ const app = createApp({
     function getLabelHtml(element) {
       let html = element.fieldLabel || element.fieldName;
       if (element.required) {
-        html += ' <span class="required-star" aria-hidden="true">*</span>';
+        html += ' <span class="required-info" aria-hidden="true">(requis)</span>';
       }
       return html;
     }
@@ -1289,9 +1360,19 @@ const app = createApp({
         // 100+ results across multiple groups (e.g. communes from 2+ départements).
         const collator = new Intl.Collator('fr');
         meta.refOptions = refData.id.map((id, idx) => {
-          const label = displayColId && refData[displayColId] ? refData[displayColId][idx] : id;
-          return { id, label, lowerLabel: String(label).toLowerCase() };
-        }).sort((a, b) => collator.compare(String(a.label), String(b.label)));
+          let label = displayColId && refData[displayColId] ? refData[displayColId][idx] : id;
+          // Empty display-col cells would render as blank rows in the dropdown —
+          // show a placeholder that still identifies the source row.
+          const isEmpty = label == null || String(label).trim() === '';
+          if (isEmpty) {
+            label = `Ligne ${id} (cellule vide)`;
+          }
+          return { id, label, lowerLabel: String(label).toLowerCase(), isEmpty };
+        }).sort((a, b) => {
+          // Keep empty placeholders after real labels (otherwise "Vide…" sorts mid-list).
+          if (a.isEmpty !== b.isEmpty) return a.isEmpty ? 1 : -1;
+          return collator.compare(String(a.label), String(b.label));
+        });
         meta.rawRefData = refData;
         // O(1) id→index for refDropdownFilter (replaces rawRefData.id.indexOf in a 45k filter loop).
         meta.refIdToIndex = new Map(refData.id.map((id, idx) => [id, idx]));
@@ -1318,13 +1399,31 @@ const app = createApp({
       return null;
     }
 
-    // sr-only hint text announced via aria-describedby on numeric fields.
-    // Without this, the SR would just say "modifier le texte, vierge" with
-    // no indication that a number is expected.
-    function getNumericHint(element) {
+    // Visible help text under fields (secondary color).
+    // Shown before submit for constraints the user can anticipate; hidden when
+    // the field has an error (the red error message takes over).
+    function getFieldHelpText(element) {
+      if (element.type !== 'field') return null;
+      const parts = [];
       const meta = columnMetadata.value[element.fieldName];
-      if (meta?.isInt) return 'Valeur entière attendue';
-      if (meta?.isNumeric) return 'Valeur numérique attendue';
+      if (meta?.isAttachment) {
+        parts.push(`${ATTACHMENT_MAX_FILES} fichiers maximum de ${ATTACHMENT_MAX_SIZE_MB} Mo chacun`);
+      } else {
+        if (meta?.isInt) parts.push('Écrivez des chiffres');
+        else if (meta?.isNumeric) parts.push('Écrivez des chiffres');
+        if (element.maxLength && isTextOrNumericField(element)) {
+          parts.push(`Maximum ${element.maxLength} caractères`);
+        }
+      }
+      return parts.length ? parts.join('. ') : null;
+    }
+
+    // aria-describedby for the attachment "Charger une PJ" button —
+    // help text when present and no error, otherwise the error message.
+    function attachmentDescribedBy(element) {
+      const fieldName = element.fieldName;
+      if (errors[fieldName]) return 'err_' + fieldName;
+      if (getFieldHelpText(element)) return 'help_' + fieldName;
       return null;
     }
 
@@ -1338,14 +1437,13 @@ const app = createApp({
       return ids.join(' ');
     }
 
-    // aria-describedby for the default text input — combines the numeric hint
-    // (if any) and the error message (if any).
+    // aria-describedby for text / textarea / numeric inputs — help text when
+    // present and no error, otherwise the error message.
     function textInputDescribedBy(element) {
       const fieldName = element.fieldName;
-      const ids = [];
-      if (getNumericHint(element)) ids.push('hint_' + fieldName);
-      if (errors[fieldName]) ids.push('err_' + fieldName);
-      return ids.length ? ids.join(' ') : null;
+      if (errors[fieldName]) return 'err_' + fieldName;
+      if (getFieldHelpText(element)) return 'help_' + fieldName;
+      return null;
     }
 
     // aria-labelledby for the closed trigger button.
@@ -1719,6 +1817,24 @@ const app = createApp({
     // FORM VALIDATION
     // -------------------------------------------------------------------------
 
+    // Focus the interactive control for a field (used after failed validation).
+    function focusFieldControl(element) {
+      const col = element.fieldName;
+      const meta = columnMetadata.value[col];
+      let el = null;
+      if (meta?.isBool) {
+        el = document.getElementById('cb_' + col);
+      } else if (meta?.isAttachment) {
+        el = document.getElementById('btn_' + col);
+      } else if (hasSelectOptions(element)) {
+        el = document.getElementById('combo_' + col);
+      } else {
+        el = document.getElementById('input_' + col);
+      }
+      el?.focus();
+      el?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    }
+
     // Validate a single field, return false if invalid
     // Checks: required fields, numeric format, integer format, max length
     function validateField(element) {
@@ -1782,17 +1898,18 @@ const app = createApp({
       Object.keys(errors).forEach(key => delete errors[key]);
 
       // Validate all visible fields (hidden conditional fields are skipped)
-      let valid = true;
+      let firstInvalidField = null;
       for (const element of formElements.value) {
         if (element.type === 'field' && shouldShowField(element)) {
           if (!validateField(element)) {
-            valid = false;
+            if (!firstInvalidField) firstInvalidField = element;
           }
         }
       }
 
-      if (!valid) {
-        formErrorMessage.value = 'Il y a une ou plusieurs erreurs dans le formulaire';
+      if (firstInvalidField) {
+        await nextTick();
+        focusFieldControl(firstInvalidField);
         return;
       }
 
@@ -1850,13 +1967,7 @@ const app = createApp({
         // Create new record
         await grist.selectedTable.create({ fields });
 
-        // Show success message
-        formSuccessMessage.value = 'Votre réponse a bien été enregistrée';
-        setTimeout(() => {
-          formSuccessMessage.value = '';
-        }, 3000);
-
-        // Reset form: clear all inputs based on their type
+        // Reset form so "Retour au formulaire" opens a blank form again
         formElements.value.forEach(el => {
           if (el.type === 'field') {
             const meta = columnMetadata.value[el.fieldName];
@@ -1868,9 +1979,19 @@ const app = createApp({
             }
           }
         });
+
+        // Replace the form with a focusable success message (no auto-hide)
+        formSuccessMessage.value = 'Votre réponse a bien été enregistrée';
+        await nextTick();
+        successMessageEl.value?.focus();
       } catch (error) {
         formErrorMessage.value = 'Erreur : ' + error.message;
       }
+    }
+
+    // Leave the success screen and show the (already reset) form again
+    function showFormAgain() {
+      formSuccessMessage.value = '';
     }
 
     // -------------------------------------------------------------------------
@@ -1891,6 +2012,7 @@ const app = createApp({
       globalPadding,
       formErrorMessage,
       formSuccessMessage,
+      successMessageEl,
       newElementType,
       selectedColumn,
       newElementContent,
@@ -1931,6 +2053,7 @@ const app = createApp({
       onDragOver,
       onDrop,
       closeAllPopups,
+      onFilterPopupKeydown,
       editLabel,
       editContent,
       saveEdit,
@@ -1979,8 +2102,9 @@ const app = createApp({
       comboDescribedBy,
       searchDescribedBy,
       getInputMode,
-      getNumericHint,
+      getFieldHelpText,
       textInputDescribedBy,
+      attachmentDescribedBy,
       dateInputDescribedBy,
       getOptionLabel,
       getFilteredOptions,
@@ -1988,7 +2112,8 @@ const app = createApp({
       isOptionSelected,
       selectOption,
       removeSelection,
-      submitForm
+      submitForm,
+      showFormAgain
     };
   }
 });

@@ -21,7 +21,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Configuration du formulaire</h2>
-          <button class="preview-btn" @click="showConfigModal = false">Previsualiser</button>
+          <button class="preview-btn" @click="showConfigModal = false">Prévisualiser</button>
         </div>
 
         <!-- Parametres globaux -->
@@ -29,8 +29,8 @@
           <div class="setting-group">
             <label>Police</label>
             <select v-model="globalFont" @change="saveConfiguration" class="setting-select">
-              <option value="">Par defaut</option>
-              <option value="'Marianne', sans-serif">Marianne (Etat)</option>
+              <option value="">Par défaut</option>
+              <option value="'Marianne', sans-serif">Marianne (État)</option>
               <option value="'Roboto', sans-serif">Roboto</option>
               <option value="'Lato', sans-serif">Lato</option>
               <option value="'Montserrat', sans-serif">Montserrat</option>
@@ -47,7 +47,7 @@
           <div class="setting-group">
             <label>Marges</label>
             <select v-model="globalPadding" @change="saveConfiguration" class="setting-select">
-              <option value="">Par defaut</option>
+              <option value="">Par défaut</option>
               <option value="small">Petites</option>
               <option value="medium">Moyennes</option>
               <option value="large">Grandes</option>
@@ -68,7 +68,11 @@
             @drop="onDrop(index, $event)"
             :class="{ 'drag-over-top': dragOverIndex === index && dragPosition === 'top', 'drag-over-bottom': dragOverIndex === index && dragPosition === 'bottom' }"
           >
-            <div class="drag-handle">&#8942;&#8942;</div>
+            <div class="drag-handle" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                <path fill="currentColor" d="M6.5 3c.2761424 0 .5.2238576.5.5v9c0 .2761424-.2238576.5-.5.5s-.5-.2238576-.5-.5v-9c0-.2761424.2238576-.5.5-.5m3 0c.2761424 0 .5.2238576.5.5v9c0 .2761424-.2238576.5-.5.5s-.5-.2238576-.5-.5v-9c0-.2761424.2238576-.5.5-.5"/>
+              </svg>
+            </div>
             <div class="element-content-wrapper">
               <!-- Champ de formulaire -->
               <template v-if="element.type === 'field'">
@@ -89,19 +93,68 @@
             <div class="element-controls">
               <!-- Boutons pour les champs -->
               <template v-if="element.type === 'field'">
-                <div class="icon-btn" @click="editLabel(index)" title="Modifier le libelle">&#9998;</div>
-                <div class="icon-btn" :class="{ active: element.required }" @click="toggleRequired(index)" title="Obligatoire">&#10022;</div>
-                <div class="icon-btn" :class="{ active: element.conditional }" @click="showConditionalPopup(index)" title="Conditionnel">&#9889;</div>
-                <div v-if="isRefField(element)" class="icon-btn" :class="{ active: element.refDropdownFilter }" @click="showRefDropdownFilterPopup(index)" title="Filtre liste déroulante">&#128279;</div>
-                <div v-if="isTextOrNumericField(element)" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" title="Critère de validation">&#10003;</div>
-                <div v-if="isPureTextField(element)" class="icon-btn" :class="{ active: element.multiline }" @click="toggleMultiline(index)" title="Multiligne">&#9776;</div>
+                <!-- boutons spécifique au type de champ -->
+                <button v-if="isPureTextField(element)" type="button" class="icon-btn" :class="{ active: element.multiline }" @click="toggleMultiline(index)" aria-label="Multiligne" title="Multiligne" :aria-pressed="element.multiline ? 'true' : 'false'" style="margin-inline: 8px;">
+                  <span class="icon-btn-inner">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M2 12.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5m0-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5m0-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5m0-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5"/>
+                    </svg>
+                  </span>
+                </button>
+                <button v-if="isRefField(element)" type="button" class="icon-btn" :class="{ active: element.refDropdownFilter }" @click="showRefDropdownFilterPopup(index)" aria-label="Filtre liste déroulante" title="Filtre liste déroulante" style="margin-inline: 8px;">
+                  <span class="icon-btn-inner">
+                    <svg width="13" height="13" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true">
+                      <path d="M5.8535534 10.8535534c-.1952622.1952621-.5118446.1952621-.7071068 0-.1952621-.1952622-.1952621-.5118446 0-.7071068l5-5c.1952622-.1952621.5118446-.1952621.7071068 0 .1952621.1952622.1952621.5118446 0 .7071068zm1.5-5.5c-.1952622.1952621-.5118446.1952621-.7071068 0-.1952621-.1952622-.1952621-.5118446 0-.7071068L8.3185182 2.974375c1.2999462-1.2994199 3.4070174-1.2994199 4.7071068.0001432 1.2994199 1.2999463 1.2994199 3.4070174-.0000716 4.7070352l-1.672 1.672c-.1952622.1952621-.5118446.1952621-.7071068 0-.1952621-.1952622-.1952621-.5118446 0-.7071068l1.6719284-1.6719284c.9090865-.9094547.9090865-2.3835817.0001432-3.2928932-.9094547-.9090865-2.3835817-.9090865-3.2929648-.0000716zM4.6464466 6.6464466c.1952622-.1952621.5118446-.1952621.7071068 0 .1952621.1952622.1952621.5118446 0 .7071068L3.681625 9.0254818c-.9090865.9094547-.9090865 2.3835817-.0001432 3.2928932.9094547.9090865 2.3835817.9090865 3.2929648.0000716l1.672-1.672c.1952622-.1952621.5118446-.1952621.7071068 0 .1952621.1952622.1952621.5118446 0 .7071068L7.6814818 13.025625c-1.2999463 1.2994199-3.4070173 1.2994199-4.7071068-.0001432-1.2994199-1.2999462-1.2994199-3.4070173.0000716-4.7070352z"/>
+                    </svg>
+                  </span>
+                </button>
+
+                <button type="button" class="icon-btn" :class="{ active: element.required }" @click="toggleRequired(index)" aria-label="Rendre obligatoire" title="Rendre obligatoire" :aria-pressed="element.required ? 'true' : 'false'">
+                  <span class="icon-btn-inner">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" aria-hidden="true" viewBox="0 0 16 16">
+                      <path d="M8 0a1 1 0 0 1 1 1v5.268l4.562-2.634a1 1 0 1 1 1 1.732L10 8l4.562 2.634a1 1 0 1 1-1 1.732L9 9.732V15a1 1 0 1 1-2 0V9.732l-4.562 2.634a1 1 0 1 1-1-1.732L6 8 1.438 5.366a1 1 0 0 1 1-1.732L7 6.268V1a1 1 0 0 1 1-1"/>
+                    </svg>
+                  </span>
+                </button>
+
+                <button v-if="isTextOrNumericField(element)" type="button" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" aria-label="Définir un nombre de caractères maximum" title="Définir un nombre de caractères maximum">
+                  <span class="icon-btn-inner">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425z"/>
+                    </svg>
+                  </span>
+                </button>
+
+                <button type="button" style="margin-inline: 8px;" class="icon-btn" :class="{ active: element.conditional }" @click="showConditionalPopup(index)" aria-label="Rendre conditionnel" title="Rendre conditionnel">
+                  <span class="icon-btn-inner">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M5.52.359A.5.5 0 0 1 6 0h4a.5.5 0 0 1 .474.658L8.694 6H12.5a.5.5 0 0 1 .395.807l-7 9a.5.5 0 0 1-.873-.454L6.823 9.5H3.5a.5.5 0 0 1-.48-.641zM6.374 1 4.168 8.5H7.5a.5.5 0 0 1 .478.647L6.78 13.04 11.478 7H8a.5.5 0 0 1-.474-.658L9.306 1z"/>
+                    </svg>
+                  </span>
+                </button>
+
+                <button type="button" class="icon-btn" @click="editLabel(index)" aria-label="Modifier le libellé" title="Modifier le libellé">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325"/>
+                  </svg>
+                </button>
               </template>
+
               <!-- Bouton edit pour texte -->
               <template v-if="element.type === 'text'">
-                <div class="icon-btn" @click="editContent(index)" title="Modifier">&#9998;</div>
+                <button type="button" class="icon-btn" @click="editContent(index)" aria-label="Modifier le texte" title="Modifier le texte">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325"/>
+                  </svg>
+                </button>
               </template>
+
               <!-- Bouton supprimer -->
-              <button @click="removeElement(index)">&#128465;</button>
+              <button @click="removeElement(index)" aria-label="Supprimer" title="Supprimer">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5zm-7.487 1a.5.5 0 0 1 .528.47l.5 8.5a.5.5 0 0 1-.998.06L5 5.03a.5.5 0 0 1 .47-.53Zm5.058 0a.5.5 0 0 1 .47.53l-.5 8.5a.5.5 0 1 1-.998-.06l.5-8.5a.5.5 0 0 1 .528-.47M8 4.5a.5.5 0 0 1 .5.5v8.5a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5"/>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -128,6 +181,15 @@
 
     <!-- Formulaire principal -->
     <div class="container" :style="containerStyle">
+      <template v-if="formSuccessMessage">
+        <div
+          ref="successMessageEl"
+          class="form-success show"
+          tabindex="-1"
+        >{{ formSuccessMessage }}</div>
+        <button type="button" class="btn btn-secondary" @click="showFormAgain">Retour au formulaire</button>
+      </template>
+      <template v-else>
       <template v-for="element in formElements" :key="element._uid">
         <!-- Séparateur -->
         <div v-if="element.type === 'separator'" class="separator"></div>
@@ -177,14 +239,14 @@
                 :aria-labelledby="'label_' + element.fieldName + ' btn_label_' + element.fieldName"
                 :aria-required="element.required ? 'true' : null"
                 :aria-invalid="errors[element.fieldName] ? 'true' : null"
-                :aria-describedby="errors[element.fieldName] ? 'err_' + element.fieldName : null"
+                :aria-describedby="attachmentDescribedBy(element)"
                 @click="triggerFileInput(element.fieldName)"
               ><span :id="'btn_label_' + element.fieldName">Charger une PJ</span></button>
               <div class="attachment-list">
                 <div v-for="(file, idx) in pendingAttachments[element.fieldName]" :key="idx" class="attachment-item">
-                  <span class="attachment-name">{{ file.name }}</span>
+                  <span :id="'att_name_' + element.fieldName + '_' + idx" class="attachment-name">{{ file.name }}</span>
                   <span class="attachment-size">{{ formatFileSize(file.size) }}</span>
-                  <button type="button" class="attachment-remove" @click="removeAttachment(element.fieldName, idx)">×</button>
+                  <button type="button" class="attachment-remove" aria-label="Supprimer le fichier" :aria-describedby="'att_name_' + element.fieldName + '_' + idx" @click="removeAttachment(element.fieldName, idx)">×</button>
                 </div>
               </div>
             </div>
@@ -353,11 +415,11 @@
                       :id="'opt_' + element.fieldName + '_' + idx"
                       class="option"
                       role="option"
-                      :class="{ selected: isOptionSelected(element.fieldName, opt.id), active: activeIndex[element.fieldName] === idx }"
+                      :class="{ selected: isOptionSelected(element.fieldName, opt.id), active: activeIndex[element.fieldName] === idx, empty: opt.isEmpty }"
                       :aria-selected="isOptionSelected(element.fieldName, opt.id) ? 'true' : 'false'"
                       @click.stop="selectOption(element, opt.id)"
                       @mouseenter="activeIndex[element.fieldName] = idx"
-                    >{{ opt.label }}</li>
+                    ><span class="option-check" aria-hidden="true">{{ isOptionSelected(element.fieldName, opt.id) ? '✓' : '' }}</span>{{ opt.label }}</li>
                     <li v-if="getFilteredOptions(element).length === 0" class="no-results" role="status">
                       Aucun résultat
                     </li>
@@ -383,13 +445,12 @@
               v-model="formData[element.fieldName]"
               :aria-required="element.required ? 'true' : null"
               :aria-invalid="errors[element.fieldName] ? 'true' : null"
-              :aria-describedby="errors[element.fieldName] ? 'err_' + element.fieldName : null"
+              :aria-describedby="textInputDescribedBy(element)"
               rows="4"
             ></textarea>
             <!-- Default text/numeric input.
-                 inputmode adapts the mobile keyboard (numeric / decimal). For screen
-                 readers, aria-describedby points to an sr-only hint that announces
-                 the expected type (otherwise the SR just says "edit text, blank"). -->
+                 inputmode adapts the mobile keyboard (numeric / decimal).
+                 aria-describedby points at visible help text (or the error). -->
             <input
               v-else
               type="text"
@@ -400,12 +461,6 @@
               :aria-invalid="errors[element.fieldName] ? 'true' : null"
               :aria-describedby="textInputDescribedBy(element)"
             >
-            <!-- sr-only hint for numeric fields (Int / Numeric) -->
-            <span
-              v-if="getNumericHint(element)"
-              :id="'hint_' + element.fieldName"
-              class="sr-only"
-            >{{ getNumericHint(element) }}</span>
             <!-- sr-only hint for Date / DateTime fields.
                  Read by screen readers via aria-describedby — explains the keyboard
                  interaction (arrow keys) because browsers awkwardly announce the
@@ -416,14 +471,16 @@
               class="sr-only"
             >Utilisez les flèches haut et bas pour modifier la valeur, gauche et droite pour passer d'un champ à l'autre.</span>
           </template>
-          <!-- Per-field error.
-               - Always in the DOM, even when there's no error (empty text).
-                 Prevents Firefox+VoiceOver from announcing it as "new content" on every submit.
-               - CSS .error-message:empty { display: none } hides it visually when empty
-                 (CSS transitions are not announced by SRs).
-               - NO role="alert": the only live region is the global .form-error.
-               - Read by VO via aria-describedby when focus lands on the field,
-                 which gives "[label], invalid, [message]". -->
+          <!-- Per-field help (constraints known before submit) and error.
+               Both stay in the DOM; :empty { display: none } hides blanks so
+               Firefox+VoiceOver does not announce them as "new content".
+               Help is cleared when an error is present so only one shows.
+               NO role="alert": on submit we focus the first invalid field so
+               VO announces via aria-describedby ("[label], invalid, [message]"). -->
+          <div
+            :id="'help_' + element.fieldName"
+            class="help-text"
+          >{{ errors[element.fieldName] ? '' : (getFieldHelpText(element) || '') }}</div>
           <div
             :id="'err_' + element.fieldName"
             class="error-message"
@@ -431,17 +488,28 @@
         </div>
       </template>
 
-      <!-- The form-error stays for non-validation errors (network, server). For
-           validation, the error summary at the top handles it, so we don't display
-           this one when fields are in error. The success message stays polite. -->
+      <!-- form-error is for non-validation errors (network, server). Field validation
+           focuses the first invalid control instead; per-field errors are announced
+           via aria-describedby when focus lands. On success the form is replaced by
+           a focusable message + "Retour au formulaire". -->
       <div v-if="formErrorMessage" role="alert" class="form-error show">{{ formErrorMessage }}</div>
-      <div v-if="formSuccessMessage" role="status" class="form-success show">{{ formSuccessMessage }}</div>
-      <button class="btn" @click="submitForm">Valider</button>
+      <button type="button" class="btn" @click="submitForm">Valider</button>
+      </template>
     </div>
 
     <!-- Popup d'edition de texte riche -->
-    <div v-if="editPopup.show" class="edit-popup rich-editor" @click="closePickersOnClickOutside($event)">
-      <h3>{{ editPopup.title }}</h3>
+    <div
+      v-if="editPopup.show"
+      id="edit-popup"
+      class="edit-popup rich-editor"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-popup-title"
+      tabindex="-1"
+      @keydown="onFilterPopupKeydown"
+      @click="closePickersOnClickOutside($event)"
+    >
+      <h3 id="edit-popup-title">{{ editPopup.title }}</h3>
       <div class="editor-toolbar">
         <button type="button" class="toolbar-btn" :class="{ active: activeFormats.bold }" @click="execCmd('bold')" title="Gras (Ctrl+B)"><strong>B</strong></button>
         <button type="button" class="toolbar-btn" :class="{ active: activeFormats.italic }" @click="execCmd('italic')" title="Italique (Ctrl+I)"><em>I</em></button>
@@ -489,14 +557,23 @@
         v-html="editPopup.value"
       ></div>
       <div class="edit-popup-buttons">
-        <button class="cancel" @click="closeEditPopup">Annuler</button>
-        <button class="save" @click="saveRichEdit">Enregistrer</button>
+        <button type="button" class="cancel" @click="closeEditPopup">Annuler</button>
+        <button type="button" class="save" @click="saveRichEdit">Enregistrer</button>
       </div>
     </div>
 
     <!-- Popup de condition -->
-    <div v-if="conditionalPopup.show" class="filter-popup">
-      <h3>Affichage conditionnel</h3>
+    <div
+      v-if="conditionalPopup.show"
+      id="conditional-popup"
+      class="filter-popup"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="conditional-popup-title"
+      tabindex="-1"
+      @keydown="onFilterPopupKeydown"
+    >
+      <h3 id="conditional-popup-title">Affichage conditionnel</h3>
       <div class="filter-row">
         <label>Ce champ est affiché si :</label>
       </div>
@@ -522,31 +599,49 @@
         </select>
       </div>
       <div class="filter-popup-buttons">
-        <button v-if="conditionalPopup.hasExisting" class="delete" @click="deleteConditional">Supprimer</button>
+        <button type="button" v-if="conditionalPopup.hasExisting" class="delete" @click="deleteConditional">Supprimer</button>
         <div style="display: flex; gap: 8px;">
-          <button class="cancel" @click="conditionalPopup.show = false; showOverlay = false">Annuler</button>
-          <button class="save" @click="saveConditional">Enregistrer</button>
+          <button type="button" class="cancel" @click="closeAllPopups">Annuler</button>
+          <button type="button" class="save" @click="saveConditional">Enregistrer</button>
         </div>
       </div>
     </div>
 
     <!-- Popup de validation (maxLength) -->
-    <div v-if="validationPopup.show" class="validation-popup">
-      <h3>Validation du champ</h3>
-      <label>Nombre max de caractères :</label>
-      <input type="number" v-model="validationPopup.maxLength" min="1">
+    <div
+      v-if="validationPopup.show"
+      id="validation-popup"
+      class="validation-popup"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="validation-popup-title"
+      tabindex="-1"
+      @keydown="onFilterPopupKeydown"
+    >
+      <h3 id="validation-popup-title">Validation du champ</h3>
+      <label for="validation-max-length">Nombre max de caractères :</label>
+      <input id="validation-max-length" type="number" v-model="validationPopup.maxLength" min="1">
       <div class="validation-popup-buttons">
-        <button v-if="validationPopup.hasExisting" class="delete" @click="deleteValidation">Supprimer</button>
+        <button type="button" v-if="validationPopup.hasExisting" class="delete" @click="deleteValidation">Supprimer</button>
         <div style="display: flex; gap: 8px;">
-          <button class="cancel" @click="validationPopup.show = false; showOverlay = false">Annuler</button>
-          <button class="save" @click="saveValidation">Enregistrer</button>
+          <button type="button" class="cancel" @click="closeAllPopups">Annuler</button>
+          <button type="button" class="save" @click="saveValidation">Enregistrer</button>
         </div>
       </div>
     </div>
 
     <!-- Dropdown filter popup (Ref/RefList) -->
-    <div v-if="refDropdownFilterPopup.show" class="filter-popup">
-      <h3>Filtre sur liste déroulante</h3>
+    <div
+      v-if="refDropdownFilterPopup.show"
+      id="ref-dropdown-filter-popup"
+      class="filter-popup"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ref-dropdown-filter-popup-title"
+      tabindex="-1"
+      @keydown="onFilterPopupKeydown"
+    >
+      <h3 id="ref-dropdown-filter-popup-title">Filtre sur liste déroulante</h3>
       <div class="filter-row">
         <label>Filtrer cette colonne par rapport à :</label>
       </div>
@@ -563,10 +658,10 @@
         <div class="ref-filter-no-fields">Aucun champ de référence compatible dans le formulaire.</div>
       </div>
       <div class="filter-popup-buttons">
-        <button v-if="refDropdownFilterPopup.hasExisting" class="delete" @click="deleteRefDropdownFilter">Supprimer</button>
+        <button type="button" v-if="refDropdownFilterPopup.hasExisting" class="delete" @click="deleteRefDropdownFilter">Supprimer</button>
         <div style="display: flex; gap: 8px;">
-          <button class="cancel" @click="refDropdownFilterPopup.show = false; showOverlay = false">Annuler</button>
-          <button class="save" @click="saveRefDropdownFilter">Enregistrer</button>
+          <button type="button" class="cancel" @click="closeAllPopups">Annuler</button>
+          <button type="button" class="save" @click="saveRefDropdownFilter">Enregistrer</button>
         </div>
       </div>
     </div>

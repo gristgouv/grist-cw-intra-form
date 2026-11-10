@@ -1,5 +1,6 @@
 /* =============================================================================
    GRIST CUSTOM FORM WIDGET - Styles
+   Prefer Grist theme variables; fall back to the widget's original colors.
    ============================================================================= */
 
 * {
@@ -9,12 +10,17 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  background: #fff;
+  font-family: var(--grist-theme-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif);
+  background: var(--grist-theme-bg-secondary, #fff);
   padding: 24px;
-  color: #37352f;
+  color: var(--grist-theme-text, #37352f);
   display: flex;
   justify-content: center;
+}
+
+*:focus {
+  outline: 2px solid var(--grist-theme-primary, #2383e2);
+  outline-offset: 1px;
 }
 
 /* -----------------------------------------------------------------------------
@@ -36,7 +42,7 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  background: white;
+  background: var(--grist-theme-modal-bg, white);
   z-index: 2000;
 }
 
@@ -52,9 +58,10 @@ body {
   display: flex;
   flex-direction: column;
   padding: 16px;
-  background: white;
+  background: var(--grist-theme-modal-bg, white);
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow:
+    0 4px 20px var(--grist-theme-modal-shadow-outer, rgba(0, 0, 0, 0.15));
 }
 
 .modal-header {
@@ -63,27 +70,28 @@ body {
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--grist-theme-decoration, #e0e0e0);
 }
 
 .modal-header h2 {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--grist-theme-large-font-size, 16px);
+  font-weight: var(--grist-theme-header-control-text-weight, 600);
+  color: var(--grist-theme-text-dark, inherit);
 }
 
 .preview-btn {
-  padding: 8px 16px;
-  background: #2383e2;
-  color: white;
+  padding: 6px 10px;
+  background: var(--grist-theme-control-primary-bg, #2383e2);
+  color: var(--grist-theme-control-primary-fg, white);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--grist-theme-control-border-radius, 4px);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--grist-theme-intro-font-size, 14px);
   font-weight: 500;
 }
 
 .preview-btn:hover {
-  background: #1a6bb8;
+  background: var(--grist-theme-control-primary-hover-bg, #1a6bb8);
 }
 
 /* -----------------------------------------------------------------------------
@@ -92,30 +100,31 @@ body {
 
 .global-settings {
   display: flex;
-  gap: 16px;
+  gap: 24px;
   padding: 12px;
-  background: #f5f5f5;
-  border-radius: 4px;
+  background: var(--grist-theme-bg-secondary, #f5f5f5);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
   margin-bottom: 16px;
 }
 
 .setting-group {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
 }
 
 .setting-group label {
-  font-size: 13px;
-  color: #666;
+  font-size: var(--grist-theme-medium-font-size, 13px);
+  color: var(--grist-theme-text-light, #666);
 }
 
 .setting-select {
   padding: 6px 10px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 13px;
-  background: white;
+  border: 1px solid var(--grist-theme-input-border, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  font-size: var(--grist-theme-medium-font-size, 13px);
+  background: var(--grist-theme-input-bg, white);
+  color: var(--grist-theme-input-fg, inherit);
   cursor: pointer;
 }
 
@@ -133,10 +142,10 @@ body {
 
 .element-item {
   padding: 8px 10px 8px 36px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  margin-bottom: 6px;
-  background: #f9f9f9;
+  border: 1px solid var(--grist-theme-decoration, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  margin-bottom: 12px;
+  background: var(--grist-theme-bg-secondary, #f9f9f9);
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -149,17 +158,18 @@ body {
 }
 
 .element-item.drag-over-top {
-  border-top: 2px solid #2383e2;
+  border-top: 2px solid var(--grist-theme-primary, #2383e2);
 }
 
 .element-item.drag-over-bottom {
-  border-bottom: 2px solid #2383e2;
+  border-bottom: 2px solid var(--grist-theme-primary, #2383e2);
 }
 
 .drag-handle {
+  display: flex;
+  align-items: center;
   cursor: grab;
-  color: #999;
-  font-size: 18px;
+  color: var(--grist-theme-secondary, #999);
   user-select: none;
   position: absolute;
   left: 8px;
@@ -174,29 +184,30 @@ body {
 .element-content-wrapper {
   flex: 1;
   min-width: 0;
+  align-self: center;
 }
 
 .element-preview {
-  font-size: 14px;
-  color: #37352f;
+  font-size: var(--grist-theme-intro-font-size, 14px);
+  color: var(--grist-theme-text, #37352f);
   margin-bottom: 4px;
 }
 
 .element-preview.separator {
   height: 1px;
-  background: #e0e0e0;
-  margin: 4px 0;
+  background: var(--grist-theme-decoration, #e0e0e0);
+  margin: 0;
 }
 
 .element-preview.text {
-  font-size: 14px;
-  color: #37352f;
+  font-size: var(--grist-theme-intro-font-size, 14px);
+  color: var(--grist-theme-text, #37352f);
   white-space: pre-wrap;
 }
 
 .element-preview.field {
-  font-size: 11px;
-  color: #666;
+  font-size: var(--grist-theme-small-font-size, 11px);
+  color: var(--grist-theme-text-light, #666);
   margin-top: 4px;
   margin-bottom: 0;
 }
@@ -209,9 +220,9 @@ body {
 }
 
 .field-label-text {
-  font-size: 13px;
+  font-size: var(--grist-theme-medium-font-size, 13px);
   font-weight: 500;
-  color: #37352f;
+  color: var(--grist-theme-text, #37352f);
 }
 
 /* -----------------------------------------------------------------------------
@@ -223,29 +234,46 @@ body {
   gap: 6px;
   flex-shrink: 0;
   align-items: flex-start;
-  padding-top: 6px;
 }
 
-.element-controls button,
-.element-controls .icon-btn {
-  background: white;
-  border: 1px solid #e0e0e0;
+.element-controls button {
+  background: var(--grist-theme-bg-default, #fff);
+  border: 1px solid var(--grist-theme-decoration, #e0e0e0);
   cursor: pointer;
-  font-size: 13px;
-  padding: 4px 7px;
+  font-size: var(--grist-theme-medium-font-size, 13px);
+  padding: 10px;
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  color: var(--grist-theme-text, inherit);
+  transition: background 0.2s;
+  line-height: 1;
+}
+
+.element-controls button:hover {
+  background: var(--grist-theme-hover-light, #f0f0f0);
+}
+
+/* Pressable icon buttons: same outer size as non-pressable (padding 10px
+   around a 13px icon). The 2px outer padding is the gap to the inner face;
+   the inner keeps a 1px transparent border + 7px padding so totals match. */
+.element-controls .icon-btn:has(> .icon-btn-inner) {
+  padding: 3px;
+}
+
+.icon-btn-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: 1px solid transparent;
   border-radius: 4px;
-  transition: all 0.2s;
+  line-height: 1;
 }
 
-.element-controls button:hover,
-.element-controls .icon-btn:not(.active):hover {
-  background: #f0f0f0;
-}
-
-.icon-btn.active {
-  background: #2383e2;
-  color: white;
-  border-color: #2383e2;
+/* Pressed state styles the inner face only (Grist buttonSelect selected). */
+.icon-btn.active > .icon-btn-inner {
+  background: var(--grist-theme-button-group-selected-bg, #e8f0fe);
+  border-color: var(--grist-theme-button-group-selected-border, #2383e2);
+  color: var(--grist-theme-button-group-selected-border, #2383e2);
 }
 
 /* -----------------------------------------------------------------------------
@@ -255,11 +283,10 @@ body {
 .add-section {
   display: flex;
   gap: 12px;
-  align-items: flex-start;
   padding: 12px;
-  background: #f9f9f9;
-  border-radius: 4px;
-  border: 1px solid #e0e0e0;
+  background: var(--grist-theme-bg-secondary, #f9f9f9);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  border: 1px solid var(--grist-theme-decoration, #e0e0e0);
 }
 
 .add-section-fields {
@@ -270,27 +297,30 @@ body {
 }
 
 .add-element-btn {
-  padding: 10px 16px;
-  background: #2383e2;
-  color: white;
+  padding: 6px 10px;
+  background: var(--grist-theme-control-primary-bg, #2383e2);
+  color: var(--grist-theme-control-primary-fg, white);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--grist-theme-control-border-radius, 4px);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--grist-theme-intro-font-size, 14px);
   font-weight: 500;
   white-space: nowrap;
+  max-height: 37px;
 }
 
 .add-element-btn:hover {
-  background: #1a6bb8;
+  background: var(--grist-theme-control-primary-hover-bg, #1a6bb8);
 }
 
 .element-input {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 14px;
+  border: 1px solid var(--grist-theme-input-border, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  font-size: var(--grist-theme-intro-font-size, 14px);
+  background: var(--grist-theme-input-bg, #fff);
+  color: var(--grist-theme-input-fg, inherit);
 }
 
 /* -----------------------------------------------------------------------------
@@ -304,7 +334,7 @@ body {
 .field.checkbox-field {
   display: flex;
   align-items: center;
-  gap: 12px;
+  column-gap: 8px;
   /* flex-wrap so .error-message drops to a new line (via flex-basis: 100%
      below) instead of sitting to the right of the label. */
   flex-wrap: wrap;
@@ -324,10 +354,10 @@ body {
 
 label {
   display: block;
-  font-size: 14px;
+  font-size: var(--grist-theme-intro-font-size, 14px);
   font-weight: 500;
-  margin-bottom: 8px;
-  color: #37352f;
+  margin-bottom: 4px;
+  color: var(--grist-theme-text, #37352f);
 }
 
 input,
@@ -335,11 +365,11 @@ select,
 textarea {
   width: 100%;
   padding: 10px 12px;
-  font-size: 14px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  background: #fff;
-  color: #37352f;
+  font-size: var(--grist-theme-intro-font-size, 14px);
+  border: 1px solid var(--grist-theme-input-border, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  background: var(--grist-theme-input-bg, #fff);
+  color: var(--grist-theme-input-fg, #37352f);
   transition: border-color 0.2s;
 }
 
@@ -349,25 +379,11 @@ textarea {
   min-height: 100px;
 }
 
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: #2383e2;
-}
-
 input[type="checkbox"] {
-  width: auto;
+  width: 18px;
+  height: 18px;
   margin: 0;
-}
-
-/* Restore a visible focus ring for keyboard users. The global
-   `input:focus { outline: none }` above kills the default outline, which is fine
-   for text inputs (the border-color change is the cue) but checkboxes have no
-   styleable border, so without this they get no focus indicator at all. */
-input[type="checkbox"]:focus-visible {
-  outline: 2px solid #2383e2;
-  outline-offset: 2px;
+  accent-color: var(--grist-theme-checkbox-selected-bg, #2383e2);
 }
 
 select[multiple] {
@@ -382,8 +398,8 @@ select[multiple] option {
 }
 
 select[multiple] option:checked {
-  background: #2383e2;
-  color: white;
+  background: var(--grist-theme-primary, #2383e2);
+  color: var(--grist-theme-white, white);
 }
 
 /* -----------------------------------------------------------------------------
@@ -431,33 +447,37 @@ select[multiple] option:checked {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  background: #e8f0fe;
+  background: var(--grist-theme-token-selection-opaque, #e8f0fe);
   border: 1px solid transparent;
   border-radius: 14px;
-  font-size: 14px;
+  font-size: var(--grist-theme-intro-font-size, 14px);
   font-weight: 500;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  color: #0d5bba;
+  font-family: var(--grist-theme-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif);
+  color: var(--grist-theme-primary, #0d5bba);
   cursor: pointer;
   line-height: 1.3;
 }
 
 .chip:hover {
-  background: #d2e3fc;
+  background: var(--grist-theme-token-selection-darker-opaque, #d2e3fc);
 }
 
-.chip:focus-visible {
-  outline: none;
-  border-color: #2383e2;
-  box-shadow: 0 0 0 2px rgba(35, 131, 226, 0.3);
-}
 
 /* The × glyph is decorative (aria-hidden in the markup). */
 .chip-x {
-  font-size: 14px;
+  font-size: var(--grist-theme-intro-font-size, 14px);
   font-weight: 500;
   line-height: 1;
-  color: #666;
+  color: var(--grist-theme-text-light, #666);
+}
+
+[data-grist-appearance="dark"] .chip {
+  background: var(--grist-theme-decoration-secondary, #e8f0fe);
+  color: var(--grist-theme-text, #0d5bba);
+}
+
+[data-grist-appearance="dark"] .chip-x {
+  color: var(--grist-theme-text, #0d5bba);
 }
 
 .custom-select-display {
@@ -465,42 +485,36 @@ select[multiple] option:checked {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  background: #fff;
+  border: 1px solid var(--grist-theme-select-button-border, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  background: var(--grist-theme-select-button-bg, #fff);
   cursor: pointer;
   min-height: 42px;
   width: 100%;
   font-family: inherit;
   font-size: inherit;
-  color: inherit;
+  color: var(--grist-theme-select-button-fg, inherit);
   text-align: left;
 }
 
-.custom-select-display:focus-visible {
-  outline: none;
-  border-color: #2383e2;
-  box-shadow: 0 0 0 2px rgba(35, 131, 226, 0.3);
-}
-
 .custom-select.open .custom-select-display {
-  border-color: #2383e2;
+  border-color: var(--grist-theme-primary, #2383e2);
 }
 
 .placeholder,
 .single-value {
-  color: #37352f;
-  font-size: 14px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  color: var(--grist-theme-text, #37352f);
+  font-size: var(--grist-theme-intro-font-size, 14px);
+  font-family: var(--grist-theme-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif);
 }
 
 .placeholder {
-  color: #595959;
+  color: var(--grist-theme-input-placeholder-fg, #595959);
 }
 
 .dropdown-arrow {
   font-size: 10px;
-  color: #666;
+  color: var(--grist-theme-text-light, #666);
   margin-left: 8px;
 }
 
@@ -509,32 +523,25 @@ select[multiple] option:checked {
   top: 100%;
   left: 0;
   right: 0;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: var(--grist-theme-menu-bg, white);
+  border: 1px solid var(--grist-theme-menu-border, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  box-shadow: 0 4px 12px var(--grist-theme-menu-shadow, rgba(0, 0, 0, 0.15));
   z-index: 1000;
   margin-top: 4px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-family: var(--grist-theme-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif);
 }
 
 .search-input {
   width: 100%;
   padding: 10px 12px;
   border: none;
-  border-bottom: 1px solid #999999;
-  border-radius: 4px 4px 0 0;
-  font-size: 14px;
+  border-bottom: 1px solid var(--grist-theme-search-border, #999999);
+  border-radius: var(--grist-theme-control-border-radius, 4px) var(--grist-theme-control-border-radius, 4px) 0 0;
+  font-size: var(--grist-theme-intro-font-size, 14px);
   font-family: inherit;
-}
-
-/* The search-input keeps DOM focus while the dropdown is open
-   (aria-activedescendant pattern). Without an override, the global rule
-   `input:focus { border-color: #2383e2 }` would keep the border blue
-   permanently — hence the explicit `border-bottom-color` here. */
-.search-input:focus {
-  outline: none;
-  border-bottom-color: #999999;
+  background: var(--grist-theme-input-bg, #fff);
+  color: var(--grist-theme-input-fg, inherit);
 }
 
 .options-list {
@@ -546,88 +553,120 @@ select[multiple] option:checked {
 }
 
 .option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 12px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--grist-theme-intro-font-size, 14px);
   font-family: inherit;
+  color: var(--grist-theme-menu-item-fg, inherit);
+  border-left: 3px solid transparent;
+}
+
+/* Fixed-width slot so labels don't shift when a checkmark appears. */
+.option-check {
+  flex: 0 0 1em;
+  width: 1em;
+  text-align: center;
+  font-weight: 700;
+  color: var(--grist-theme-text, #0d5bba);
+}
+
+.option.empty {
+  font-style: italic;
 }
 
 .option:hover,
 .option.active {
-  background: #f5f5f5;
+  background: var(--grist-theme-hover, #e3e3e3);
+  border-left-color: var(--grist-theme-primary, #2383e2);
 }
 
 .option.selected {
-  background: #e8f0fe;
-  color: #0d5bba;
+  background: var(--grist-theme-decoration-secondary, #e8f0fe);
+  color: var(--grist-theme-text, #0d5bba);
+  font-weight: 500;
 }
 
-.option.active.selected {
-  background: #d2e3fc;
+.option.active.selected,
+.option:hover.selected {
+  background: var(--grist-theme-decoration-secondary, #e8f0fe);
+  color: var(--grist-theme-text, #0d5bba);
 }
 
 .no-results {
   padding: 10px 12px;
-  color: #595959;
-  font-size: 14px;
+  color: var(--grist-theme-text-light, #595959);
+  font-size: var(--grist-theme-intro-font-size, 14px);
   text-align: center;
 }
 
 /* Ref dropdown filter popup */
 .ref-filter-rule {
-  font-size: 13px;
-  color: #37352f;
-  background: #f5f5f5;
+  font-size: var(--grist-theme-medium-font-size, 13px);
+  color: var(--grist-theme-text, #37352f);
+  background: var(--grist-theme-bg-secondary, #f5f5f5);
   padding: 8px 12px;
-  border-radius: 4px;
-  border: 1px solid #e0e0e0;
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  border: 1px solid var(--grist-theme-decoration, #e0e0e0);
   width: 100%;
 }
 
 .ref-filter-rule code {
-  font-family: monospace;
-  color: #0d5bba;
+  font-family: var(--grist-theme-font-family-mono, monospace);
+  color: var(--grist-theme-primary, #0d5bba);
 }
 
 .ref-filter-no-fields {
-  font-size: 13px;
-  color: #595959;
+  font-size: var(--grist-theme-medium-font-size, 13px);
+  color: var(--grist-theme-text-light, #595959);
   font-style: italic;
 }
 
 .filter-too-many {
-  font-size: 13px;
-  color: #d32f2f;
+  font-size: var(--grist-theme-medium-font-size, 13px);
+  color: var(--grist-theme-error, #d32f2f);
   font-style: italic;
   padding: 4px 0;
 }
 
 .dropdown-loading {
   padding: 12px;
-  color: #595959;
-  font-size: 14px;
+  color: var(--grist-theme-text-light, #595959);
+  font-size: var(--grist-theme-intro-font-size, 14px);
   text-align: center;
 }
 
 .more-results {
   padding: 8px 12px;
-  font-size: 12px;
-  color: #595959;
+  font-size: var(--grist-theme-x-small-font-size, 12px);
+  color: var(--grist-theme-text-light, #595959);
   font-style: italic;
   text-align: center;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--grist-theme-decoration, #e0e0e0);
 }
 
 /* -----------------------------------------------------------------------------
    Messages et erreurs
    ----------------------------------------------------------------------------- */
 
-/* The element stays in the DOM (template without v-if) to avoid spurious
+/* Help + error stay in the DOM (template without v-if) to avoid spurious
    "new content" announcements by Firefox+VoiceOver. :empty hides the box
    when there's no text — a CSS transition, ignored by screen readers. */
+.help-text {
+  color: var(--grist-theme-text-light, #666);
+  font-size: var(--grist-theme-medium-font-size, 13px);
+  margin-top: 4px;
+}
+
+.help-text:empty {
+  display: none;
+}
+
 .error-message {
-  color: #d32f2f;
-  font-size: 12px;
+  color: var(--grist-theme-text-error, #d32f2f);
+  font-size: var(--grist-theme-medium-font-size, 13px);
   margin-top: 4px;
 }
 
@@ -636,12 +675,12 @@ select[multiple] option:checked {
 }
 
 .form-error {
-  color: #d32f2f;
-  font-size: 14px;
+  color: var(--grist-theme-text-error, #d32f2f);
+  font-size: var(--grist-theme-intro-font-size, 14px);
   margin-bottom: 12px;
   padding: 12px;
-  background: #ffebee;
-  border-radius: 4px;
+  background: var(--grist-theme-custom-css-uikit-error-100, #ffebee);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
   display: none;
   text-align: center;
 }
@@ -651,22 +690,30 @@ select[multiple] option:checked {
 }
 
 .form-success {
-  color: #2e7d32;
-  font-size: 14px;
+  color: var(--grist-theme-custom-css-uikit-success-600, #2e7d32);
+  font-size: var(--grist-theme-intro-font-size, 14px);
   margin-bottom: 12px;
   padding: 12px;
-  background: #e8f5e9;
-  border-radius: 4px;
+  background: var(--grist-theme-custom-css-uikit-success-100, #e8f5e9);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
   display: none;
   text-align: center;
+  outline: none;
 }
 
 .form-success.show {
   display: block;
 }
 
-.required-star {
-  color: #d32f2f;
+.form-success:focus-visible {
+  outline: 2px solid var(--grist-theme-primary, #2383e2);
+  outline-offset: 2px;
+}
+
+.required-info {
+  font-size: 0.9em;
+  font-style: italic;
+  font-weight: normal;
 }
 
 /* -----------------------------------------------------------------------------
@@ -674,13 +721,14 @@ select[multiple] option:checked {
    ----------------------------------------------------------------------------- */
 
 .btn {
-  background: #2383e2;
-  color: white;
+  font-family: inherit;
+  background: var(--grist-theme-control-primary-bg, #2383e2);
+  color: var(--grist-theme-control-primary-fg, white);
   border: none;
-  padding: 12px 20px;
-  font-size: 14px;
+  padding: 8px 10px;
+  font-size: var(--grist-theme-intro-font-size, 14px);
   font-weight: 500;
-  border-radius: 4px;
+  border-radius: var(--grist-theme-control-border-radius, 4px);
   cursor: pointer;
   transition: background 0.2s;
   margin-top: 10px;
@@ -688,11 +736,20 @@ select[multiple] option:checked {
 }
 
 .btn:hover {
-  background: #1a6bb8;
+  background: var(--grist-theme-control-primary-hover-bg, #1a6bb8);
 }
 
 .btn:active {
   transform: translateY(1px);
+}
+
+.btn-secondary {
+  background: var(--grist-theme-decoration-secondary, #f0f0f0);
+  color: var(--grist-theme-text, #37352f);
+}
+
+.btn-secondary:hover {
+  background: var(--grist-theme-decoration, #e0e0e0);
 }
 
 /* -----------------------------------------------------------------------------
@@ -701,14 +758,14 @@ select[multiple] option:checked {
 
 .separator {
   height: 1px;
-  background: #e0e0e0;
+  background: var(--grist-theme-decoration, #e0e0e0);
   margin: 48px auto;
   width: 100%;
 }
 
 .custom-text {
-  font-size: 14px;
-  color: #37352f;
+  font-size: var(--grist-theme-intro-font-size, 14px);
+  color: var(--grist-theme-text, #37352f);
   margin: 12px 0 20px 0;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -740,10 +797,11 @@ select[multiple] option:checked {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: white;
+  background: var(--grist-theme-popup-bg, white);
   padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow:
+    0 4px 20px var(--grist-theme-popup-shadow-outer, rgba(0, 0, 0, 0.15));
   z-index: 3000;
   min-width: 400px;
 }
@@ -751,21 +809,23 @@ select[multiple] option:checked {
 .edit-popup h3,
 .filter-popup h3,
 .validation-popup h3 {
-  font-size: 16px;
+  font-size: var(--grist-theme-large-font-size, 16px);
   margin-bottom: 12px;
-  color: #37352f;
+  color: var(--grist-theme-text, #37352f);
 }
 
 .edit-popup textarea {
   width: 100%;
   padding: 8px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 14px;
+  border: 1px solid var(--grist-theme-input-border, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  font-size: var(--grist-theme-intro-font-size, 14px);
   margin-bottom: 12px;
   min-height: 80px;
   resize: vertical;
   font-family: inherit;
+  background: var(--grist-theme-input-bg, #fff);
+  color: var(--grist-theme-input-fg, inherit);
 }
 
 .edit-popup-buttons,
@@ -781,25 +841,27 @@ select[multiple] option:checked {
 .validation-popup-buttons button {
   padding: 8px 16px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--grist-theme-control-border-radius, 4px);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--grist-theme-intro-font-size, 14px);
 }
 
 .validation-popup label {
   display: block;
-  font-size: 14px;
-  color: #37352f;
+  font-size: var(--grist-theme-intro-font-size, 14px);
+  color: var(--grist-theme-text, #37352f);
   margin-bottom: 8px;
 }
 
 .validation-popup input {
   width: 100%;
   padding: 8px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 14px;
+  border: 1px solid var(--grist-theme-input-border, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  font-size: var(--grist-theme-intro-font-size, 14px);
   margin-bottom: 16px;
+  background: var(--grist-theme-input-bg, #fff);
+  color: var(--grist-theme-input-fg, inherit);
 }
 
 .validation-popup-buttons {
@@ -820,62 +882,61 @@ select[multiple] option:checked {
   flex-wrap: wrap;
   gap: 4px;
   padding: 8px;
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px 4px 0 0;
+  background: var(--grist-theme-bg-secondary, #f5f5f5);
+  border: 1px solid var(--grist-theme-decoration, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px) var(--grist-theme-control-border-radius, 4px) 0 0;
   margin-bottom: 0;
 }
 
 .editor-toolbar .toolbar-btn {
   padding: 6px 10px;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  background: var(--grist-theme-bg-default, white);
+  border: 1px solid var(--grist-theme-decoration, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--grist-theme-intro-font-size, 14px);
   min-width: 32px;
   height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  color: var(--grist-theme-text, inherit);
 }
 
 .editor-toolbar .toolbar-btn:hover {
-  background: #2383e2;
-  color: white;
-  border-color: #2383e2;
+  background: var(--grist-theme-control-primary-bg, #2383e2);
+  color: var(--grist-theme-control-primary-fg, white);
+  border-color: var(--grist-theme-primary, #2383e2);
 }
 
 .editor-toolbar .toolbar-btn.active {
-  background: #2383e2;
-  color: white;
-  border-color: #2383e2;
+  background: var(--grist-theme-control-primary-bg, #2383e2);
+  color: var(--grist-theme-control-primary-fg, white);
+  border-color: var(--grist-theme-primary, #2383e2);
 }
 
 .editor-toolbar .toolbar-select {
   padding: 4px 8px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 13px;
+  border: 1px solid var(--grist-theme-input-border, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  font-size: var(--grist-theme-medium-font-size, 13px);
   height: 32px;
   cursor: pointer;
   max-width: 100px;
+  background: var(--grist-theme-input-bg, #fff);
+  color: var(--grist-theme-input-fg, inherit);
 }
 
 .editor-toolbar .toolbar-sep {
   width: 1px;
-  background: #e0e0e0;
+  background: var(--grist-theme-decoration, #e0e0e0);
   margin: 0 4px;
-}
-
-.editor-toolbar .color-picker-wrapper {
-  position: relative;
 }
 
 .editor-toolbar .color-icon {
   font-weight: bold;
   text-decoration: underline;
-  text-decoration-color: #000;
+  text-decoration-color: var(--grist-theme-black, #000);
 }
 
 .editor-toolbar .bg-color-icon {
@@ -889,11 +950,11 @@ select[multiple] option:checked {
   position: absolute;
   top: 100%;
   left: 0;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  background: var(--grist-theme-popup-bg, white);
+  border: 1px solid var(--grist-theme-decoration, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
   padding: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px var(--grist-theme-popup-shadow-outer, rgba(0, 0, 0, 0.15));
   z-index: 100;
   margin-top: 4px;
 }
@@ -907,7 +968,7 @@ select[multiple] option:checked {
 .color-picker .color-btn {
   width: 24px;
   height: 24px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--grist-theme-decoration, #e0e0e0);
   border-radius: 3px;
   cursor: pointer;
   padding: 0;
@@ -915,11 +976,11 @@ select[multiple] option:checked {
 
 .color-picker .color-btn:hover {
   transform: scale(1.1);
-  border-color: #2383e2;
+  border-color: var(--grist-theme-primary, #2383e2);
 }
 
 .color-picker .color-btn.no-color {
-  background: white;
+  background: var(--grist-theme-bg-default, white);
   position: relative;
 }
 
@@ -930,7 +991,7 @@ select[multiple] option:checked {
   left: 50%;
   width: 1px;
   height: 20px;
-  background: #000;
+  background: var(--grist-theme-black, #000);
   transform: rotate(-45deg);
   transform-origin: center;
 }
@@ -940,11 +1001,11 @@ select[multiple] option:checked {
   position: absolute;
   top: 100%;
   left: 0;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  background: var(--grist-theme-popup-bg, white);
+  border: 1px solid var(--grist-theme-decoration, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
   padding: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px var(--grist-theme-popup-shadow-outer, rgba(0, 0, 0, 0.15));
   z-index: 100;
   width: 200px;
   margin-top: 4px;
@@ -962,35 +1023,32 @@ select[multiple] option:checked {
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 18px;
-  border-radius: 4px;
+  font-size: var(--grist-theme-x-large-font-size, 18px);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
 }
 
 .emoji-picker .emoji-btn:hover {
-  background: #f0f0f0;
+  background: var(--grist-theme-hover-light, #f0f0f0);
 }
 
 .rich-editor-content {
   width: 100%;
   min-height: 150px;
   padding: 12px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--grist-theme-input-border, #e0e0e0);
   border-top: none;
-  border-radius: 0 0 4px 4px;
-  font-size: 14px;
+  border-radius: 0 0 var(--grist-theme-control-border-radius, 4px) var(--grist-theme-control-border-radius, 4px);
+  font-size: var(--grist-theme-intro-font-size, 14px);
   line-height: 1.5;
   margin-bottom: 12px;
   overflow-y: auto;
   max-height: 300px;
-}
-
-.rich-editor-content:focus {
-  outline: none;
-  border-color: #2383e2;
+  background: var(--grist-theme-input-bg, #fff);
+  color: var(--grist-theme-input-fg, inherit);
 }
 
 .rich-editor-content a {
-  color: #2383e2;
+  color: var(--grist-theme-link, #2383e2);
 }
 
 .rich-editor-content ul {
@@ -999,18 +1057,18 @@ select[multiple] option:checked {
 }
 
 .cancel {
-  background: #f0f0f0;
-  color: #37352f;
+  background: var(--grist-theme-control-secondary-hover-bg, #f0f0f0);
+  color: var(--grist-theme-text, #37352f);
 }
 
 .save {
-  background: #2383e2;
-  color: white;
+  background: var(--grist-theme-control-primary-bg, #2383e2);
+  color: var(--grist-theme-control-primary-fg, white);
 }
 
 .delete {
-  background: #d32f2f;
-  color: white;
+  background: var(--grist-theme-error, #d32f2f);
+  color: var(--grist-theme-white, white);
 }
 
 .filter-row {
@@ -1021,17 +1079,19 @@ select[multiple] option:checked {
 }
 
 .filter-row label {
-  font-size: 14px;
-  color: #37352f;
+  font-size: var(--grist-theme-intro-font-size, 14px);
+  color: var(--grist-theme-text, #37352f);
   margin-bottom: 0;
 }
 
 .filter-row select {
   flex: 1;
   padding: 8px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 14px;
+  border: 1px solid var(--grist-theme-input-border, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
+  font-size: var(--grist-theme-intro-font-size, 14px);
+  background: var(--grist-theme-input-bg, #fff);
+  color: var(--grist-theme-input-fg, inherit);
 }
 
 .filter-popup-buttons {
@@ -1052,23 +1112,23 @@ select[multiple] option:checked {
 }
 
 .attachment-input.error .attachment-btn {
-  border-color: #d32f2f;
+  border-color: var(--grist-theme-error, #d32f2f);
 }
 
 .attachment-btn {
   padding: 10px 16px;
-  background: #f5f5f5;
-  border: 1px dashed #ccc;
-  border-radius: 4px;
+  background: var(--grist-theme-input-bg, #fff);
+  border: 1px dashed var(--grist-theme-input-border, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
   cursor: pointer;
-  font-size: 14px;
-  color: #666;
-  transition: all 0.2s;
+  font-size: var(--grist-theme-intro-font-size, 14px);
+  color: var(--grist-theme-text-light, #666);
+  transition: background 0.2s;
 }
 
 .attachment-btn:hover {
-  background: #e8e8e8;
-  border-color: #999;
+  background: var(--grist-theme-decoration-secondary, #e8e8e8);
+  border-color: var(--grist-theme-secondary, #999);
 }
 
 .attachment-list {
@@ -1077,28 +1137,32 @@ select[multiple] option:checked {
   gap: 6px;
 }
 
+.attachment-list:empty {
+  display: none;
+}
+
 .attachment-item {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #f9f9f9;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  background: var(--grist-theme-bg-secondary, #f9f9f9);
+  border: 1px solid var(--grist-theme-decoration, #e0e0e0);
+  border-radius: var(--grist-theme-control-border-radius, 4px);
 }
 
 .attachment-name {
   flex: 1;
-  font-size: 13px;
-  color: #37352f;
+  font-size: var(--grist-theme-medium-font-size, 13px);
+  color: var(--grist-theme-text, #37352f);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .attachment-size {
-  font-size: 12px;
-  color: #999;
+  font-size: var(--grist-theme-x-small-font-size, 12px);
+  color: var(--grist-theme-secondary, #999);
   flex-shrink: 0;
 }
 
@@ -1107,15 +1171,15 @@ select[multiple] option:checked {
   height: 24px;
   border: none;
   background: transparent;
-  color: #999;
+  color: var(--grist-theme-secondary, #999);
   cursor: pointer;
-  font-size: 18px;
+  font-size: var(--grist-theme-x-large-font-size, 18px);
   line-height: 1;
-  border-radius: 4px;
+  border-radius: var(--grist-theme-control-border-radius, 4px);
   flex-shrink: 0;
 }
 
 .attachment-remove:hover {
-  background: #ffebee;
-  color: #d32f2f;
+  background: var(--grist-theme-custom-css-uikit-error-100, #ffebee);
+  color: var(--grist-theme-error, #d32f2f);
 }
