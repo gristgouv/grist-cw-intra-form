@@ -461,9 +461,9 @@
                  Prevents Firefox+VoiceOver from announcing it as "new content" on every submit.
                - CSS .error-message:empty { display: none } hides it visually when empty
                  (CSS transitions are not announced by SRs).
-               - NO role="alert": the only live region is the global .form-error.
-               - Read by VO via aria-describedby when focus lands on the field,
-                 which gives "[label], invalid, [message]". -->
+               - NO role="alert": on submit we focus the first invalid field so
+                 VO announces via aria-describedby ("[label], invalid, [message]").
+                 The global .form-error live region is only for network/server errors. -->
           <div
             :id="'err_' + element.fieldName"
             class="error-message"
@@ -471,9 +471,9 @@
         </div>
       </template>
 
-      <!-- The form-error stays for non-validation errors (network, server). For
-           validation, the error summary at the top handles it, so we don't display
-           this one when fields are in error. The success message stays polite. -->
+      <!-- form-error is for non-validation errors (network, server). Field validation
+           focuses the first invalid control instead; per-field errors are announced
+           via aria-describedby when focus lands. Success stays polite. -->
       <div v-if="formErrorMessage" role="alert" class="form-error show">{{ formErrorMessage }}</div>
       <div v-if="formSuccessMessage" role="status" class="form-success show">{{ formSuccessMessage }}</div>
       <button class="btn" @click="submitForm">Valider</button>

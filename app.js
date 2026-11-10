@@ -1303,7 +1303,7 @@ const app = createApp({
     function getLabelHtml(element) {
       let html = element.fieldLabel || element.fieldName;
       if (element.required) {
-        html += ' <span class="required-star" aria-hidden="true">*</span>';
+        html += ' <span class="required-info" aria-hidden="true">(requis)</span>';
       }
       return html;
     }
@@ -1796,6 +1796,24 @@ const app = createApp({
     // FORM VALIDATION
     // -------------------------------------------------------------------------
 
+    // Focus the interactive control for a field (used after failed validation).
+    function focusFieldControl(element) {
+      const col = element.fieldName;
+      const meta = columnMetadata.value[col];
+      let el = null;
+      if (meta?.isBool) {
+        el = document.getElementById('cb_' + col);
+      } else if (meta?.isAttachment) {
+        el = document.getElementById('btn_' + col);
+      } else if (hasSelectOptions(element)) {
+        el = document.getElementById('combo_' + col);
+      } else {
+        el = document.getElementById('input_' + col);
+      }
+      el?.focus();
+      el?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    }
+
     // Validate a single field, return false if invalid
     // Checks: required fields, numeric format, integer format, max length
     function validateField(element) {
@@ -1859,17 +1877,18 @@ const app = createApp({
       Object.keys(errors).forEach(key => delete errors[key]);
 
       // Validate all visible fields (hidden conditional fields are skipped)
-      let valid = true;
+      let firstInvalidField = null;
       for (const element of formElements.value) {
         if (element.type === 'field' && shouldShowField(element)) {
           if (!validateField(element)) {
-            valid = false;
+            if (!firstInvalidField) firstInvalidField = element;
           }
         }
       }
 
-      if (!valid) {
-        formErrorMessage.value = 'Il y a une ou plusieurs erreurs dans le formulaire';
+      if (firstInvalidField) {
+        await nextTick();
+        focusFieldControl(firstInvalidField);
         return;
       }
 
