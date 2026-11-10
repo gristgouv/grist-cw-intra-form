@@ -353,7 +353,7 @@
                       :id="'opt_' + element.fieldName + '_' + idx"
                       class="option"
                       role="option"
-                      :class="{ selected: isOptionSelected(element.fieldName, opt.id), active: activeIndex[element.fieldName] === idx }"
+                      :class="{ selected: isOptionSelected(element.fieldName, opt.id), active: activeIndex[element.fieldName] === idx, empty: opt.isEmpty }"
                       :aria-selected="isOptionSelected(element.fieldName, opt.id) ? 'true' : 'false'"
                       @click.stop="selectOption(element, opt.id)"
                       @mouseenter="activeIndex[element.fieldName] = idx"

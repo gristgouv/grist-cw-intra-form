@@ -552,6 +552,10 @@ select[multiple] option:checked {
   font-family: inherit;
 }
 
+.option.empty {
+  font-style: italic;
+}
+
 .option:hover,
 .option.active {
   background: #f5f5f5;

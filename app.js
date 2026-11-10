@@ -1289,9 +1289,19 @@ const app = createApp({
         // 100+ results across multiple groups (e.g. communes from 2+ départements).
         const collator = new Intl.Collator('fr');
         meta.refOptions = refData.id.map((id, idx) => {
-          const label = displayColId && refData[displayColId] ? refData[displayColId][idx] : id;
-          return { id, label, lowerLabel: String(label).toLowerCase() };
-        }).sort((a, b) => collator.compare(String(a.label), String(b.label)));
+          let label = displayColId && refData[displayColId] ? refData[displayColId][idx] : id;
+          // Empty display-col cells would render as blank rows in the dropdown —
+          // show a placeholder that still identifies the source row.
+          const isEmpty = label == null || String(label).trim() === '';
+          if (isEmpty) {
+            label = `Ligne ${id} (cellule vide)`;
+          }
+          return { id, label, lowerLabel: String(label).toLowerCase(), isEmpty };
+        }).sort((a, b) => {
+          // Keep empty placeholders after real labels (otherwise "Vide…" sorts mid-list).
+          if (a.isEmpty !== b.isEmpty) return a.isEmpty ? 1 : -1;
+          return collator.compare(String(a.label), String(b.label));
+        });
         meta.rawRefData = refData;
         // O(1) id→index for refDropdownFilter (replaces rawRefData.id.indexOf in a 45k filter loop).
         meta.refIdToIndex = new Map(refData.id.map((id, idx) => [id, idx]));
