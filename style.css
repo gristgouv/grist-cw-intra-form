@@ -555,6 +555,10 @@ select[multiple] option:checked {
   font-style: italic;
 }
 
+.option.empty {
+  font-style: italic;
+}
+
 .option:hover,
 .option.active {
   background: var(--grist-theme-hover-light, #f5f5f5);
