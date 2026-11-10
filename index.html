@@ -419,7 +419,7 @@
                       :aria-selected="isOptionSelected(element.fieldName, opt.id) ? 'true' : 'false'"
                       @click.stop="selectOption(element, opt.id)"
                       @mouseenter="activeIndex[element.fieldName] = idx"
-                    >{{ opt.label }}</li>
+                    ><span class="option-check" aria-hidden="true">{{ isOptionSelected(element.fieldName, opt.id) ? '✓' : '' }}</span>{{ opt.label }}</li>
                     <li v-if="getFilteredOptions(element).length === 0" class="no-results" role="status">
                       Aucun résultat
                     </li>
