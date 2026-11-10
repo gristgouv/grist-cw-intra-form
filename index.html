@@ -239,14 +239,14 @@
                 :aria-labelledby="'label_' + element.fieldName + ' btn_label_' + element.fieldName"
                 :aria-required="element.required ? 'true' : null"
                 :aria-invalid="errors[element.fieldName] ? 'true' : null"
-                :aria-describedby="errors[element.fieldName] ? 'err_' + element.fieldName : null"
+                :aria-describedby="attachmentDescribedBy(element)"
                 @click="triggerFileInput(element.fieldName)"
               ><span :id="'btn_label_' + element.fieldName">Charger une PJ</span></button>
               <div class="attachment-list">
                 <div v-for="(file, idx) in pendingAttachments[element.fieldName]" :key="idx" class="attachment-item">
-                  <span class="attachment-name">{{ file.name }}</span>
+                  <span :id="'att_name_' + element.fieldName + '_' + idx" class="attachment-name">{{ file.name }}</span>
                   <span class="attachment-size">{{ formatFileSize(file.size) }}</span>
-                  <button type="button" class="attachment-remove" @click="removeAttachment(element.fieldName, idx)">×</button>
+                  <button type="button" class="attachment-remove" aria-label="Supprimer le fichier" :aria-describedby="'att_name_' + element.fieldName + '_' + idx" @click="removeAttachment(element.fieldName, idx)">×</button>
                 </div>
               </div>
             </div>

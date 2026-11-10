@@ -1117,13 +1117,13 @@ select[multiple] option:checked {
 
 .attachment-btn {
   padding: 10px 16px;
-  background: var(--grist-theme-bg-secondary, #f5f5f5);
-  border: 1px dashed var(--grist-theme-decoration, #ccc);
+  background: var(--grist-theme-input-bg, #fff);
+  border: 1px dashed var(--grist-theme-input-border, #e0e0e0);
   border-radius: var(--grist-theme-control-border-radius, 4px);
   cursor: pointer;
   font-size: var(--grist-theme-intro-font-size, 14px);
   color: var(--grist-theme-text-light, #666);
-  transition: all 0.2s;
+  transition: background 0.2s;
 }
 
 .attachment-btn:hover {
@@ -1135,6 +1135,10 @@ select[multiple] option:checked {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.attachment-list:empty {
+  display: none;
 }
 
 .attachment-item {

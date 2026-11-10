@@ -47,6 +47,11 @@ const app = createApp({
     // ATTACHMENT HANDLING
     // -------------------------------------------------------------------------
 
+    // Limits shown as help text and enforced on select.
+    const ATTACHMENT_MAX_FILES = 3;
+    const ATTACHMENT_MAX_SIZE_MB = 10;
+    const ATTACHMENT_MAX_SIZE = ATTACHMENT_MAX_SIZE_MB * 1024 * 1024;
+
     // Format file size in human-readable format (bytes, Ko, Mo)
     function formatFileSize(bytes) {
       if (bytes < 1024) return bytes + ' o';
@@ -62,21 +67,19 @@ const app = createApp({
     // Handle file selection
     function onFileSelect(col, event) {
       const files = Array.from(event.target.files);
-      const maxSize = 10 * 1024 * 1024; // 10 MB
-      const maxFiles = 3;
 
       if (!pendingAttachments[col]) {
         pendingAttachments[col] = [];
       }
 
       files.forEach(file => {
-        if (pendingAttachments[col].length >= maxFiles) {
-          errors[col] = `Maximum ${maxFiles} pièces jointes par champ`;
+        if (pendingAttachments[col].length >= ATTACHMENT_MAX_FILES) {
+          errors[col] = `Maximum ${ATTACHMENT_MAX_FILES} pièces jointes par champ`;
           return;
         }
 
-        if (file.size > maxSize) {
-          errors[col] = `Le fichier "${file.name}" dépasse 10 Mo`;
+        if (file.size > ATTACHMENT_MAX_SIZE) {
+          errors[col] = `Le fichier "${file.name}" dépasse ${ATTACHMENT_MAX_SIZE_MB} Mo`;
           return;
         }
 
@@ -1396,19 +1399,32 @@ const app = createApp({
       return null;
     }
 
-    // Visible help text under text/numeric inputs (secondary color).
+    // Visible help text under fields (secondary color).
     // Shown before submit for constraints the user can anticipate; hidden when
     // the field has an error (the red error message takes over).
     function getFieldHelpText(element) {
       if (element.type !== 'field') return null;
       const parts = [];
       const meta = columnMetadata.value[element.fieldName];
-      if (meta?.isInt) parts.push('Écrivez des chiffres');
-      else if (meta?.isNumeric) parts.push('Écrivez des chiffres');
-      if (element.maxLength && isTextOrNumericField(element)) {
-        parts.push(`Maximum ${element.maxLength} caractères`);
+      if (meta?.isAttachment) {
+        parts.push(`${ATTACHMENT_MAX_FILES} fichiers maximum de ${ATTACHMENT_MAX_SIZE_MB} Mo chacun`);
+      } else {
+        if (meta?.isInt) parts.push('Écrivez des chiffres');
+        else if (meta?.isNumeric) parts.push('Écrivez des chiffres');
+        if (element.maxLength && isTextOrNumericField(element)) {
+          parts.push(`Maximum ${element.maxLength} caractères`);
+        }
       }
       return parts.length ? parts.join('. ') : null;
+    }
+
+    // aria-describedby for the attachment "Charger une PJ" button —
+    // help text when present and no error, otherwise the error message.
+    function attachmentDescribedBy(element) {
+      const fieldName = element.fieldName;
+      if (errors[fieldName]) return 'err_' + fieldName;
+      if (getFieldHelpText(element)) return 'help_' + fieldName;
+      return null;
     }
 
     // aria-describedby value for date/datetime inputs.
@@ -2088,6 +2104,7 @@ const app = createApp({
       getInputMode,
       getFieldHelpText,
       textInputDescribedBy,
+      attachmentDescribedBy,
       dateInputDescribedBy,
       getOptionLabel,
       getFilteredOptions,
