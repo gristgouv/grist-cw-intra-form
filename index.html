@@ -21,7 +21,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Configuration du formulaire</h2>
-          <button class="preview-btn" @click="showConfigModal = false">Previsualiser</button>
+          <button class="preview-btn" @click="showConfigModal = false">Prévisualiser</button>
         </div>
 
         <!-- Parametres globaux -->
@@ -29,8 +29,8 @@
           <div class="setting-group">
             <label>Police</label>
             <select v-model="globalFont" @change="saveConfiguration" class="setting-select">
-              <option value="">Par defaut</option>
-              <option value="'Marianne', sans-serif">Marianne (Etat)</option>
+              <option value="">Par défaut</option>
+              <option value="'Marianne', sans-serif">Marianne (État)</option>
               <option value="'Roboto', sans-serif">Roboto</option>
               <option value="'Lato', sans-serif">Lato</option>
               <option value="'Montserrat', sans-serif">Montserrat</option>
@@ -47,7 +47,7 @@
           <div class="setting-group">
             <label>Marges</label>
             <select v-model="globalPadding" @change="saveConfiguration" class="setting-select">
-              <option value="">Par defaut</option>
+              <option value="">Par défaut</option>
               <option value="small">Petites</option>
               <option value="medium">Moyennes</option>
               <option value="large">Grandes</option>
@@ -68,7 +68,11 @@
             @drop="onDrop(index, $event)"
             :class="{ 'drag-over-top': dragOverIndex === index && dragPosition === 'top', 'drag-over-bottom': dragOverIndex === index && dragPosition === 'bottom' }"
           >
-            <div class="drag-handle">&#8942;&#8942;</div>
+            <div class="drag-handle" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                <path fill="currentColor" d="M6.5 3c.2761424 0 .5.2238576.5.5v9c0 .2761424-.2238576.5-.5.5s-.5-.2238576-.5-.5v-9c0-.2761424.2238576-.5.5-.5m3 0c.2761424 0 .5.2238576.5.5v9c0 .2761424-.2238576.5-.5.5s-.5-.2238576-.5-.5v-9c0-.2761424.2238576-.5.5-.5"/>
+              </svg>
+            </div>
             <div class="element-content-wrapper">
               <!-- Champ de formulaire -->
               <template v-if="element.type === 'field'">
@@ -89,19 +93,55 @@
             <div class="element-controls">
               <!-- Boutons pour les champs -->
               <template v-if="element.type === 'field'">
-                <button type="button" class="icon-btn" @click="editLabel(index)" title="Modifier le libelle">&#9998;</button>
-                <button type="button" class="icon-btn" :class="{ active: element.required }" @click="toggleRequired(index)" title="Obligatoire" :aria-pressed="element.required ? 'true' : 'false'">&#10022;</button>
-                <button type="button" class="icon-btn" :class="{ active: element.conditional }" @click="showConditionalPopup(index)" title="Conditionnel">&#9889;</button>
-                <button v-if="isRefField(element)" type="button" class="icon-btn" :class="{ active: element.refDropdownFilter }" @click="showRefDropdownFilterPopup(index)" title="Filtre liste déroulante">&#128279;</button>
-                <button v-if="isTextOrNumericField(element)" type="button" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" title="Critère de validation">&#10003;</button>
-                <button v-if="isPureTextField(element)" type="button" class="icon-btn" :class="{ active: element.multiline }" @click="toggleMultiline(index)" title="Multiligne" :aria-pressed="element.multiline ? 'true' : 'false'">&#9776;</button>
+
+                <button type="button" class="icon-btn" @click="editLabel(index)" aria-label="Modifier le libellé" title="Modifier le libellé">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325"/>
+                  </svg>
+                </button>
+
+                <button type="button" class="icon-btn" :class="{ active: element.required }" @click="toggleRequired(index)" aria-label="Obligatoire" title="Obligatoire" :aria-pressed="element.required ? 'true' : 'false'">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" aria-hidden="true" viewBox="0 0 16 16">
+                    <path d="M8 0a1 1 0 0 1 1 1v5.268l4.562-2.634a1 1 0 1 1 1 1.732L10 8l4.562 2.634a1 1 0 1 1-1 1.732L9 9.732V15a1 1 0 1 1-2 0V9.732l-4.562 2.634a1 1 0 1 1-1-1.732L6 8 1.438 5.366a1 1 0 0 1 1-1.732L7 6.268V1a1 1 0 0 1 1-1"/>
+                  </svg>
+                </button>
+
+                <button type="button" class="icon-btn" :class="{ active: element.conditional }" @click="showConditionalPopup(index)" aria-label="Conditionnel" title="Conditionnel">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M5.52.359A.5.5 0 0 1 6 0h4a.5.5 0 0 1 .474.658L8.694 6H12.5a.5.5 0 0 1 .395.807l-7 9a.5.5 0 0 1-.873-.454L6.823 9.5H3.5a.5.5 0 0 1-.48-.641zM6.374 1 4.168 8.5H7.5a.5.5 0 0 1 .478.647L6.78 13.04 11.478 7H8a.5.5 0 0 1-.474-.658L9.306 1z"/>
+                  </svg>
+                </button>
+
+                <button v-if="isRefField(element)" type="button" class="icon-btn" :class="{ active: element.refDropdownFilter }" @click="showRefDropdownFilterPopup(index)" aria-label="Filtre liste déroulante" title="Filtre liste déroulante">&#128279;</button>
+
+                <button v-if="isTextOrNumericField(element)" type="button" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" aria-label="Critère de validation" title="Critère de validation">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425z"/>
+                  </svg>
+                </button>
+
+                <button v-if="isPureTextField(element)" type="button" class="icon-btn" :class="{ active: element.multiline }" @click="toggleMultiline(index)" aria-label="Multiligne" title="Multiligne" :aria-pressed="element.multiline ? 'true' : 'false'">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M2 12.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5m0-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5m0-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5m0-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5"/>
+                  </svg>
+                </button>
               </template>
+
               <!-- Bouton edit pour texte -->
               <template v-if="element.type === 'text'">
-                <button type="button" class="icon-btn" @click="editContent(index)" title="Modifier">&#9998;</button>
+                <button type="button" class="icon-btn" @click="editContent(index)" aria-label="Modifier" title="Modifier">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325"/>
+                  </svg>
+                </button>
               </template>
+
               <!-- Bouton supprimer -->
-              <button @click="removeElement(index)">&#128465;</button>
+              <button @click="removeElement(index)" aria-label="Supprimer" title="Supprimer">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5zm-7.487 1a.5.5 0 0 1 .528.47l.5 8.5a.5.5 0 0 1-.998.06L5 5.03a.5.5 0 0 1 .47-.53Zm5.058 0a.5.5 0 0 1 .47.53l-.5 8.5a.5.5 0 1 1-.998-.06l.5-8.5a.5.5 0 0 1 .528-.47M8 4.5a.5.5 0 0 1 .5.5v8.5a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5"/>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
