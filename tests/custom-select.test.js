@@ -76,8 +76,10 @@ describe('ref-dropdown filter', () => {
     expect(src).toContain('refDropdownFilterPopup');
   });
 
-  it('renders the 🔗 (chain) icon in the config modal', () => {
-    expect(html).toContain('&#128279;');
+  it('renders the ref-dropdown filter button in the config modal', () => {
+    expect(html).toMatch(
+      /@click="showRefDropdownFilterPopup\(index\)"[\s\S]*?<svg[\s\S]*?<\/svg>/
+    );
   });
 });
 
