@@ -89,16 +89,16 @@
             <div class="element-controls">
               <!-- Boutons pour les champs -->
               <template v-if="element.type === 'field'">
-                <div class="icon-btn" @click="editLabel(index)" title="Modifier le libelle">&#9998;</div>
-                <div class="icon-btn" :class="{ active: element.required }" @click="toggleRequired(index)" title="Obligatoire">&#10022;</div>
-                <div class="icon-btn" :class="{ active: element.conditional }" @click="showConditionalPopup(index)" title="Conditionnel">&#9889;</div>
-                <div v-if="isRefField(element)" class="icon-btn" :class="{ active: element.refDropdownFilter }" @click="showRefDropdownFilterPopup(index)" title="Filtre liste déroulante">&#128279;</div>
-                <div v-if="isTextOrNumericField(element)" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" title="Critère de validation">&#10003;</div>
-                <div v-if="isPureTextField(element)" class="icon-btn" :class="{ active: element.multiline }" @click="toggleMultiline(index)" title="Multiligne">&#9776;</div>
+                <button type="button" class="icon-btn" @click="editLabel(index)" title="Modifier le libelle">&#9998;</button>
+                <button type="button" class="icon-btn" :class="{ active: element.required }" @click="toggleRequired(index)" title="Obligatoire" :aria-pressed="element.required ? 'true' : 'false'">&#10022;</button>
+                <button type="button" class="icon-btn" :class="{ active: element.conditional }" @click="showConditionalPopup(index)" title="Conditionnel">&#9889;</button>
+                <button v-if="isRefField(element)" type="button" class="icon-btn" :class="{ active: element.refDropdownFilter }" @click="showRefDropdownFilterPopup(index)" title="Filtre liste déroulante">&#128279;</button>
+                <button v-if="isTextOrNumericField(element)" type="button" class="icon-btn" :class="{ active: element.maxLength }" @click="showValidationPopup(index)" title="Critère de validation">&#10003;</button>
+                <button v-if="isPureTextField(element)" type="button" class="icon-btn" :class="{ active: element.multiline }" @click="toggleMultiline(index)" title="Multiligne" :aria-pressed="element.multiline ? 'true' : 'false'">&#9776;</button>
               </template>
               <!-- Bouton edit pour texte -->
               <template v-if="element.type === 'text'">
-                <div class="icon-btn" @click="editContent(index)" title="Modifier">&#9998;</div>
+                <button type="button" class="icon-btn" @click="editContent(index)" title="Modifier">&#9998;</button>
               </template>
               <!-- Bouton supprimer -->
               <button @click="removeElement(index)">&#128465;</button>
