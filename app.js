@@ -1396,14 +1396,19 @@ const app = createApp({
       return null;
     }
 
-    // sr-only hint text announced via aria-describedby on numeric fields.
-    // Without this, the SR would just say "modifier le texte, vierge" with
-    // no indication that a number is expected.
-    function getNumericHint(element) {
+    // Visible help text under text/numeric inputs (secondary color).
+    // Shown before submit for constraints the user can anticipate; hidden when
+    // the field has an error (the red error message takes over).
+    function getFieldHelpText(element) {
+      if (element.type !== 'field') return null;
+      const parts = [];
       const meta = columnMetadata.value[element.fieldName];
-      if (meta?.isInt) return 'Valeur entière attendue';
-      if (meta?.isNumeric) return 'Valeur numérique attendue';
-      return null;
+      if (meta?.isInt) parts.push('Écrivez des chiffres');
+      else if (meta?.isNumeric) parts.push('Écrivez des chiffres');
+      if (element.maxLength && isTextOrNumericField(element)) {
+        parts.push(`Maximum ${element.maxLength} caractères`);
+      }
+      return parts.length ? parts.join('. ') : null;
     }
 
     // aria-describedby value for date/datetime inputs.
@@ -1416,14 +1421,13 @@ const app = createApp({
       return ids.join(' ');
     }
 
-    // aria-describedby for the default text input — combines the numeric hint
-    // (if any) and the error message (if any).
+    // aria-describedby for text / textarea / numeric inputs — help text when
+    // present and no error, otherwise the error message.
     function textInputDescribedBy(element) {
       const fieldName = element.fieldName;
-      const ids = [];
-      if (getNumericHint(element)) ids.push('hint_' + fieldName);
-      if (errors[fieldName]) ids.push('err_' + fieldName);
-      return ids.length ? ids.join(' ') : null;
+      if (errors[fieldName]) return 'err_' + fieldName;
+      if (getFieldHelpText(element)) return 'help_' + fieldName;
+      return null;
     }
 
     // aria-labelledby for the closed trigger button.
@@ -2082,7 +2086,7 @@ const app = createApp({
       comboDescribedBy,
       searchDescribedBy,
       getInputMode,
-      getNumericHint,
+      getFieldHelpText,
       textInputDescribedBy,
       dateInputDescribedBy,
       getOptionLabel,
